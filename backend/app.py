@@ -4,6 +4,7 @@ from flask import Flask
 from config import DATABASE_URL
 from models import get_db, close_db
 from routes.hello import hello_bp
+from routes.dealing import deal_newhand
 
 def create_app():
     app = Flask(__name__)

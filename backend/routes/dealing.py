@@ -14,18 +14,15 @@ def deal_newhand():
     decks_count       = 6
     double_first_two  = 'any'       # or '10-11', '9-11'
 
-    # —— Build & shuffle the shoe ——  
     suits = ['hearts','diamonds','clubs','spades']
     ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
     shoe = [{'suit': s, 'rank': r} for s in suits for r in ranks] * decks_count
     random.shuffle(shoe)
 
-    # —— Deal two cards to player, two to dealer ——  
     player_cards = [shoe.pop(), shoe.pop()]
     dealer_up    = shoe.pop()
     dealer_hole  = shoe.pop()
 
-    # —— Package up dealer cards based on hole_mode ——  
     if hole_mode == 'perfect':
         dealer_cards = [dealer_up, dealer_hole]
     elif hole_mode == '2-3':
@@ -35,7 +32,6 @@ def deal_newhand():
     else:
         dealer_cards = [dealer_up, {'hole_bucket': None}]
 
-    # —— Return JSON payload ——  
     return jsonify({
         'player_cards': player_cards,
         'dealer_cards': dealer_cards,
