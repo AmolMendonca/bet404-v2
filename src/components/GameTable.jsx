@@ -44,17 +44,26 @@ const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) 
     return (
       <div className={`
         ${mini ? 'w-12 h-16' : 'w-20 h-28'} 
-        bg-gradient-to-br from-blue-600 to-blue-800 
-        rounded-lg shadow-xl 
-        flex items-center justify-center 
-        transform transition-all duration-300 
+        bg-white rounded-lg shadow-xl 
+        border-2 border-purple-400
+        flex flex-col items-center justify-between 
+        p-2 transform transition-all duration-300 
         hover:shadow-2xl hover:-translate-y-1
         relative overflow-hidden
+        ring-4 ring-purple-200
       `}>
-        <div className="absolute inset-0 bg-white opacity-10 
-          bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,rgba(255,255,255,.05)_10px,rgba(255,255,255,.05)_20px)]">
+        <div className={`${getColor()} font-bold ${mini ? 'text-xs' : 'text-lg'}`}>{value}</div>
+        {getSuitIcon()}
+        <div className={`${getColor()} font-bold ${mini ? 'text-xs' : 'text-lg'}`}>{value}</div>
+        
+        {/* Special indicator overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-purple-700/20 rounded-lg"></div>
+        <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-1">
+          <Eye className="w-3 h-3 text-white" />
         </div>
-        <div className="text-white font-bold text-lg">?</div>
+        <div className="absolute bottom-1 left-1 bg-purple-500 text-white text-[7px] font-bold px-1 rounded">
+          HOLE
+        </div>
       </div>
     )
   }
@@ -402,7 +411,7 @@ fetchNewHand(); }
               </div>
               <div className="flex justify-center space-x-3">
                 {dealerHand.map((card, idx) => (<Card key={idx} {...card} />))}
-                {dealerHoleCard && !showHoleCard && (<Card hidden />)}
+                {dealerHoleCard && !showHoleCard && (<Card {...dealerHoleCard} hidden />)}
                 {dealerHoleCard && showHoleCard && (<Card {...dealerHoleCard} highlight />)}
               </div>
               {dealerHoleCard && mode !== 'normal' && !showHoleCard && (
@@ -488,7 +497,7 @@ fetchNewHand(); }
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
+          25% { transform: translateX(-5px); }¸
           75% { transform: translateX(5px); }
         }
         .animate-shake { animation: shake 0.5s ease-in-out; }
