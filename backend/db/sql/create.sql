@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS charts (
   chart_id SERIAL PRIMARY KEY,
   user_id  TEXT   REFERENCES users(user_id),
   mode     TEXT   NOT NULL
-             CHECK (mode IN ('4-10','2-3','perfect'))
+             CHECK (mode IN ('4-10','2-3','perfect')),
+    UNIQUE (user_id, mode)
 );
 
 -- 5) Chart Entries
