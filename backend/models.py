@@ -1,10 +1,9 @@
-# backend/models.py  (or db.py)
 
 import os
 import psycopg2
 import psycopg2.extras
 from flask import g
-from bfkt import app   # or from your app factory
+from bfkt import app   
 
 def get_db():
     """Get or create the Postgres connection for this request."""
