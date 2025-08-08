@@ -4,7 +4,7 @@ from flask import Flask
 from config import DATABASE_URL
 from models import get_db, close_db
 from routes.hello import hello_bp
-from routes.dealing import deal_newhand
+from routes.dealing import dealing_bp
 
 def create_app():
     app = Flask(__name__)
@@ -13,6 +13,7 @@ def create_app():
     app.teardown_appcontext(close_db)
 
     app.register_blueprint(hello_bp, url_prefix='/api')
+    app.register_blueprint(dealing_bp, url_prefix='/api')
 
     return app
 
