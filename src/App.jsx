@@ -1,8 +1,60 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useAuth } from './hooks/useAuth'
 import GameTable from './components/GameTable'
-import { Eye, EyeOff, LogOut, Settings, BarChart3, Target, TrendingUp, Clock, Award, PlayCircle } from 'lucide-react'
+import {
+  Eye, EyeOff, LogOut, Settings as SettingsIcon, BarChart3, Gamepad2, Info,
+  BookOpen, ChevronDown, ChevronUp, ArrowLeft, Edit3, RefreshCw
+} from 'lucide-react'
+
+/* ----------------------------- Shared UI bits ----------------------------- */
+
+function TopNav({ title = 'Bet404', onGo, showBack = false }) {
+  const { user, signOut } = useAuth()
+  return (
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
+      <div className="px-4 h-14 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          {showBack && (
+            <button onClick={() => onGo('home')} className="p-1 text-gray-600">
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
+            <span className="text-white font-semibold text-sm">B</span>
+          </div>
+          <div>
+            <h1 className="text-base font-semibold text-gray-900">{title}</h1>
+            <p className="text-[11px] text-gray-500">Trainer Settings</p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button onClick={() => onGo('stats')} className="p-2 text-gray-500" title="Stats">
+            <BarChart3 size={18} />
+          </button>
+          <button onClick={() => onGo('about')} className="p-2 text-gray-500" title="About">
+            <Info size={18} />
+          </button>
+          <button onClick={() => onGo('settings')} className="p-2 text-gray-500" title="Settings">
+            <SettingsIcon size={18} />
+          </button>
+          <div className="hidden sm:block text-xs text-gray-600">{user?.email}</div>
+          <button
+            onClick={() => signOut()}
+            className="flex items-center space-x-1 text-gray-600"
+            title="Sign out"
+          >
+            <LogOut size={16} />
+            <span className="text-sm">Sign out</span>
+          </button>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+/* ------------------------------ Login screen ------------------------------ */
 
 function LoginScreen() {
   const [email, setEmail] = useState('')
@@ -10,7 +62,6 @@ function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [isSignUp, setIsSignUp] = useState(false)
   const [showReset, setShowReset] = useState(false)
-  
   const { signIn, signUp, resetPassword, loading } = useAuth()
 
   const handleSubmit = async (e) => {
@@ -38,9 +89,9 @@ function LoginScreen() {
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-white font-semibold text-lg">H</span>
+              <span className="text-white font-semibold text-lg">B</span>
             </div>
-            <h1 className="text-2xl font-medium text-gray-900 mb-2">Reset Password</h1>
+            <h1 className="text-2xl font-medium text-gray-900 mb-2">Reset password</h1>
             <p className="text-gray-500 text-sm">Enter your email to reset password</p>
           </div>
 
@@ -49,25 +100,23 @@ function LoginScreen() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
+              placeholder="Email"
               className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
               required
             />
-            
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800 disabled:opacity-50"
             >
-              {loading ? 'Sending...' : 'Send Reset Email'}
+              {loading ? 'Sending...' : 'Send reset email'}
             </button>
-            
             <button
               type="button"
               onClick={() => setShowReset(false)}
               className="w-full text-gray-600 py-2"
             >
-              Back to Sign In
+              Back to sign in
             </button>
           </form>
         </div>
@@ -80,10 +129,10 @@ function LoginScreen() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-semibold text-lg">H</span>
+            <span className="text-white font-semibold text-lg">B</span>
           </div>
           <h1 className="text-2xl font-medium text-gray-900 mb-2">
-            {isSignUp ? 'Create Account' : 'bet404'}
+            {isSignUp ? 'Create account' : 'Bet404'}
           </h1>
           <p className="text-gray-500 text-sm">
             {isSignUp ? 'Sign up to get started' : 'Professional blackjack training'}
@@ -99,7 +148,6 @@ function LoginScreen() {
             className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
             required
           />
-          
           <div className="relative">
             <input
               type={showPassword ? 'text' : 'password'}
@@ -113,24 +161,24 @@ function LoginScreen() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute right-4 top-1/2 translate-y-[-50%] text-gray-400"
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
           </div>
 
-          {!isSignUp && (
-            <div className="flex justify-between text-sm">
-              <span></span>
-              <button
-                type="button"
-                onClick={() => setShowReset(true)}
-                className="text-black hover:underline"
-              >
-                Forgot password?
-              </button>
-            </div>
-          )}
+        {!isSignUp && (
+          <div className="flex justify-between text-sm">
+            <span></span>
+            <button
+              type="button"
+              onClick={() => setShowReset(true)}
+              className="text-black hover:underline"
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
 
           <button
             type="submit"
@@ -140,7 +188,7 @@ function LoginScreen() {
             {loading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
             ) : (
-              isSignUp ? 'Create Account' : 'Sign In'
+              isSignUp ? 'Create account' : 'Sign in'
             )}
           </button>
         </form>
@@ -150,9 +198,9 @@ function LoginScreen() {
             onClick={() => setIsSignUp(!isSignUp)}
             className="text-sm text-gray-600"
           >
-            {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+            {isSignUp ? 'Already have an account? ' : "Do not have an account? "}
             <span className="text-black font-medium hover:underline">
-              {isSignUp ? 'Sign In' : 'Sign Up'}
+              {isSignUp ? 'Sign in' : 'Sign up'}
             </span>
           </button>
         </div>
@@ -161,290 +209,476 @@ function LoginScreen() {
   )
 }
 
-function Dashboard() {
-  const { user, signOut } = useAuth()
-  const [showStats, setShowStats] = useState(false)
-  const [activeGame, setActiveGame] = useState(null) // ADD THIS LINE
-  
-  // Mock user statistics - in real app this would come from your database
-  const stats = {
-    lifetime: {
-      handsPlayed: 2847,
-      accuracy: 87.3,
-      correctMoves: 2485,
-      totalErrors: 362
-    },
-    modes: {
-      perfect: { hands: 1250, accuracy: 91.2 },
-      bucket4to10: { hands: 986, accuracy: 85.7 },
-      bucket2to3: { hands: 611, accuracy: 83.1 }
-    },
-    session: {
-      handsPlayed: 0,
-      accuracy: 0,
-      streak: 0
+/* ------------------------- Strategy chart page (lite) ------------------------- */
+
+function StrategyChartPage({ onBack }) {
+  const [activeChart, setActiveChart] = useState('hard')
+  const [showLegend, setShowLegend] = useState(false)
+  const [rule] = useState('H17')
+  const [bucket, setBucket] = useState('4to10')
+  const [editable, setEditable] = useState(true)
+
+  const dealerCards = ['2','3','4','5','6','7','8','9','T','A']
+
+  const seedHard = {
+    '7': ['H','H','H','H','H','H','H','H','H','H'],
+    '8': ['H','H','H','H','D','H','H','H','H','H'],
+    '9': ['H','H','D','D','D','D','D','D','H','H'],
+    '10, 11': ['D','D','D','D','D','D','D','D','D','H'],
+    '12': ['H','H','H','S','S','S','H','H','H','H'],
+    '13': ['H','S','S','S','S','S','S','H','H','H'],
+    '14': ['H','S','S','S','S','S','S','H','H','H'],
+    '15': ['S','S','S','S','S','S','S','S','H','RH/H'],
+    '16': ['S','S','S','S','S','S','S','S','H','RH'],
+    '17': ['S','S','S','S','S','S','S','S','S','RS'],
+    '18': ['S','S','S','S','S','S','S','S','S','S'],
+    'A2': ['H','H','H','D','D','H','H','H','H','H'],
+    'A3, A4': ['H','H','H','H','D','D','D','H','H','H'],
+    'A5': ['H','H','H','D','D','D','D','H','H','H'],
+    'A6': ['H','H','H','D','D','D','D','D','H','H'],
+    'A7': ['S','S','DS','DS','DS','DS','DS','S','H'],
+    'A8': ['S','S','S','S','DS','S','S','S','S','S'],
+    '22': ['H','H','H','P','P','P','P','P','H','H'],
+    '33': ['H','H','H','P','P','P','P','P','H','H'],
+    '44': ['H','H','H','H','P','P','H','H','H','H'],
+    '55': ['D','D','D','D','D','D','D','D','D','H'],
+    '66': ['H','H','H','P','P','P','P','P','H','H'],
+    '77': ['P','P','P','P','P','P','P','P','P','H'],
+    '88': ['P','P','P','P','P','P','P','P','P','RH/PRH'],
+    '99': ['S','P','P','P','P','P','P','P','P','P'],
+    'TT': ['S','S','S','S','S','S','S','S','S','S'],
+    'AA': ['P','P','P','P','P','P','P','P','P','P'],
+  }
+
+  const table = seedHard
+
+  const [charts, setCharts] = useState({ H17: { '4to10': { hard: seedHard } } })
+  const setCell = (rowLabel, colIndex, value) => {
+    setCharts(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      next.H17['4to10'].hard[rowLabel][colIndex] = value.toUpperCase()
+      return next
+    })
+  }
+
+  const resetCurrentTable = () => setCharts({ H17: { '4to10': { hard: seedHard } } })
+
+  const getActionColor = (action) => {
+    switch (action) {
+      case 'H': return 'bg-red-100 text-red-800'
+      case 'S': return 'bg-green-100 text-green-800'
+      case 'D': return 'bg-blue-100 text-blue-800'
+      case 'DS': return 'bg-blue-100 text-blue-800'
+      case 'P': return 'bg-purple-100 text-purple-800'
+      case 'RH': return 'bg-orange-100 text-orange-800'
+      case 'RS': return 'bg-orange-100 text-orange-800'
+      case 'RH/H': return 'bg-orange-100 text-orange-800'
+      case 'RH/P': return 'bg-orange-100 text-orange-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
-
-  const handleSignOut = () => {
-    signOut()
-  }
-
-  const startTraining = (mode = 'perfect') => {
-    setActiveGame(mode) // CHANGE THIS LINE
-  }
-
-  // ADD THIS: If in game, show game table
-  if (activeGame) {
-    return <GameTable mode={activeGame} onBack={() => setActiveGame(null)} />
+  const getActionText = (action) => {
+    switch (action) {
+      case 'DS': return 'D/S'
+      case 'RH': return 'R/H'
+      case 'RS': return 'R/S'
+      case 'RH/H': return 'R/H'
+      case 'RH/P': return 'R/P'
+      default: return action
+    }
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-              <span className="text-white font-semibold text-sm">H</span>
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900">Holecarding Trainer</h1>
-              <p className="text-xs text-gray-500">Blackjack Training v1.0</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">{user?.email}</span>
-            <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-              <Settings size={18} />
+      <TopNav title="Strategy chart" onGo={onBack} showBack />
+      <main className="px-2 py-4">
+        <div className="grid grid-cols-1 gap-2 mb-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-2 flex items-center space-x-2">
+            <label className="text-sm text-gray-700">Dealer</label>
+            <select value={bucket} onChange={(e)=>setBucket(e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-sm">
+              <option value="4to10">4 to 10</option>
+              <option value="2to3">2 to 3</option>
+            </select>
+            <button
+              onClick={()=>setEditable(!editable)}
+              className="ml-auto px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1"
+            >
+              <Edit3 size={14} />
+              <span>{editable ? 'Editing' : 'View only'}</span>
             </button>
             <button
-              onClick={handleSignOut}
-              className="flex items-center space-x-1 text-gray-600 hover:text-gray-900 transition-colors"
+              onClick={resetCurrentTable}
+              className="px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1"
+              title="Reset"
             >
-              <LogOut size={16} />
-              <span className="text-sm">Sign Out</span>
+              <RefreshCw size={14} />
+              <span>Reset</span>
             </button>
           </div>
-        </div>
-      </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {/* Quick Start Section */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Start</h2>
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button
-                onClick={() => startTraining('perfect')}
-                className="group bg-black text-white p-4 rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <PlayCircle size={24} />
-                  <div className="text-left">
-                    <div className="font-medium">Perfect Mode</div>
-                    <div className="text-sm text-gray-300">See exact hole cards</div>
-                  </div>
-                </div>
-              </button>
-              
-              <button
-                onClick={() => startTraining('bucket4to10')}
-                className="group border border-gray-200 p-4 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <Target size={24} className="text-gray-400" />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900">Bucket 4-10</div>
-                    <div className="text-sm text-gray-500">Grouped hole cards</div>
-                  </div>
-                </div>
-              </button>
-              
-              <button
-                onClick={() => startTraining('bucket2to3')}
-                className="group border border-gray-200 p-4 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <Award size={24} className="text-gray-400" />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900">Bucket 2-3</div>
-                    <div className="text-sm text-gray-500">Advanced training</div>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Lifetime Stats */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <BarChart3 size={20} className="text-gray-400" />
-              <h3 className="font-medium text-gray-900">Lifetime Stats</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600 text-sm">Total Hands</span>
-                <span className="font-semibold">{stats.lifetime.handsPlayed.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 text-sm">Accuracy</span>
-                <span className="font-semibold text-green-600">{stats.lifetime.accuracy}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 text-sm">Correct Moves</span>
-                <span className="font-semibold">{stats.lifetime.correctMoves.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 text-sm">Total Errors</span>
-                <span className="font-semibold text-red-500">{stats.lifetime.totalErrors}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Session Stats */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <Clock size={20} className="text-gray-400" />
-              <h3 className="font-medium text-gray-900">Current Session</h3>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600 text-sm">Hands Played</span>
-                <span className="font-semibold">{stats.session.handsPlayed}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 text-sm">Accuracy</span>
-                <span className="font-semibold">
-                  {stats.session.accuracy > 0 ? `${stats.session.accuracy}%` : '-'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600 text-sm">Current Streak</span>
-                <span className="font-semibold">{stats.session.streak}</span>
-              </div>
-            </div>
+          <div className="bg-white rounded-lg border border-gray-200 p-2">
             <button
-              onClick={() => startTraining()}
-              className="w-full mt-4 bg-black text-white py-2 rounded-lg hover:bg-gray-800 transition-colors text-sm"
+              onClick={() => setShowLegend(!showLegend)}
+              className="flex items-center space-x-2 text-sm text-gray-600"
             >
-              Start New Session
+              <Info size={16} />
+              <span>Legend</span>
+              {showLegend ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </button>
+            {showLegend && (
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-red-100 text-red-800 font-medium">H</span><span>Hit</span></div>
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-green-100 text-green-800 font-medium">S</span><span>Stand</span></div>
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">D</span><span>Double</span></div>
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">D/S</span><span>Double or Stand</span></div>
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-purple-100 text-purple-800 font-medium">P</span><span>Split</span></div>
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-orange-100 text-orange-800 font-medium">R/H</span><span>Surrender or Hit</span></div>
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-orange-100 text-orange-800 font-medium">R/S</span><span>Surrender or Stand</span></div>
+                <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-orange-100 text-orange-800 font-medium">R/P</span><span>Surrender or Split</span></div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+            <h2 className="font-medium text-gray-900">Hard totals</h2>
+            <p className="text-xs text-gray-500 mt-1">H17, dealer {bucket === '4to10' ? '4 to 10' : '2 to 3'}</p>
           </div>
 
-          {/* Mode Performance */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <TrendingUp size={20} className="text-gray-400" />
-                <h3 className="font-medium text-gray-900">Mode Performance</h3>
-              </div>
-              <button
-                onClick={() => setShowStats(!showStats)}
-                className="text-black text-sm hover:underline"
-              >
-                {showStats ? 'Hide' : 'Details'}
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Perfect</span>
-                <div className="text-right">
-                  <div className="font-semibold text-green-600">{stats.modes.perfect.accuracy}%</div>
-                  <div className="text-xs text-gray-500">{stats.modes.perfect.hands} hands</div>
+          <div className="overflow-x-auto">
+            <div className="min-w-max">
+              <div className="flex bg-gray-100 border-b border-gray-200">
+                <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-600 border-r border-gray-200">
+                  Total
                 </div>
+                {dealerCards.map((card) => (
+                  <div key={card} className="w-12 py-3 text-center text-xs font-medium text-gray-600 border-r border-gray-200 last:border-r-0">
+                    {card}
+                  </div>
+                ))}
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Bucket 4-10</span>
-                <div className="text-right">
-                  <div className="font-semibold text-yellow-600">{stats.modes.bucket4to10.accuracy}%</div>
-                  <div className="text-xs text-gray-500">{stats.modes.bucket4to10.hands} hands</div>
-                </div>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Bucket 2-3</span>
-                <div className="text-right">
-                  <div className="font-semibold text-orange-600">{stats.modes.bucket2to3.accuracy}%</div>
-                  <div className="text-xs text-gray-500">{stats.modes.bucket2to3.hands} hands</div>
-                </div>
+
+              <div className="divide-y divide-gray-200">
+                {Object.entries(table).map(([playerHand, actions]) => (
+                  <div key={playerHand} className="flex">
+                    <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-900 bg-gray-50 border-r border-gray-200">
+                      {playerHand}
+                    </div>
+                    {actions.map((action, index) => (
+                      <div key={index} className="w-12 py-2 px-1 text-center border-r border-gray-200 last:border-r-0">
+                        {editable ? (
+                          <select
+                            value={action}
+                            onChange={(e) => setCell(playerHand, index, e.target.value)}
+                            className={`w-full text-xs rounded px-1 py-1 ${getActionColor(action)}`}
+                          >
+                            {['H','S','D','DS','P','RH','RS','RH/H','RH/P'].map(opt => (
+                              <option key={opt} value={opt}>{getActionText(opt)}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className={`px-1.5 py-1 rounded text-xs font-medium ${getActionColor(action)}`}>
+                            {getActionText(action)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
+      </main>
+    </div>
+  )
+}
 
-        {/* Detailed Stats Modal/Section */}
-        {showStats && (
-          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-8">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Detailed Statistics</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {Object.entries(stats.modes).map(([mode, data]) => (
-                <div key={mode} className="border border-gray-100 rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 mb-3 capitalize">
-                    {mode.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Hands Played</span>
-                      <span className="font-medium">{data.hands}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Accuracy Rate</span>
-                      <span className="font-medium">{data.accuracy}%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Correct Moves</span>
-                      <span className="font-medium">{Math.round(data.hands * data.accuracy / 100)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Errors</span>
-                      <span className="font-medium text-red-500">{data.hands - Math.round(data.hands * data.accuracy / 100)}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => startTraining(mode)}
-                    className="w-full mt-3 border border-gray-200 py-2 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-                  >
-                    Train This Mode
-                  </button>
-                </div>
-              ))}
+/* --------------------------- Blackjack settings UI -------------------------- */
+
+function BlackjackSettings({ onStart, onBack }) {
+  const [holeCard, setHoleCard] = useState('perfect') // perfect, 4-10, 2-3, A to 9
+  const [surrenderAllowed, setSurrenderAllowed] = useState('yes') // yes/no
+  const [soft17Hit, setSoft17Hit] = useState('true') // true/false
+  const [decksCount, setDecksCount] = useState('6') // 4/5/6
+  const [doubleAllowed, setDoubleAllowed] = useState('any') // any/9-11,10-11
+
+  const disableDecks = holeCard === 'A to 9'
+  const settings = useMemo(() => ({
+    hole_mode: holeCard === '4-10' ? '4to10' : holeCard === '2-3' ? '2to3' : holeCard === 'A to 9' ? 'Ato9' : 'perfect',
+    surrender_allowed: surrenderAllowed === 'yes',
+    soft17_hit: soft17Hit === 'true',
+    decks_count: Number(decksCount),
+    double_first_two: doubleAllowed === 'any' ? 'any' : doubleAllowed, // keep exact text for backend if needed
+  }), [holeCard, surrenderAllowed, soft17Hit, decksCount, doubleAllowed])
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="Settings" onGo={onBack} showBack />
+      <main className="px-4 py-4 max-w-md mx-auto">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Hole card</label>
+            <select
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              value={holeCard}
+              onChange={(e)=>setHoleCard(e.target.value)}
+            >
+              <option>Perfect</option>
+              <option>4-10</option>
+              <option>2-3</option>
+              <option>A to 9</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">Surrender</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                value={surrenderAllowed}
+                onChange={(e)=>setSurrenderAllowed(e.target.value)}
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">Dealer soft 17</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                value={soft17Hit}
+                onChange={(e)=>setSoft17Hit(e.target.value)}
+              >
+                <option value="true">Hit</option>
+                <option value="false">Stand</option>
+              </select>
             </div>
           </div>
-        )}
 
-        {/* Settings Preview */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Training Settings</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <span className="text-gray-600">Deck Count</span>
-              <div className="font-medium">6+ Decks</div>
+              <label className="block text-sm text-gray-700 mb-1">Decks</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                value={decksCount}
+                onChange={(e)=>setDecksCount(e.target.value)}
+                disabled={disableDecks}
+              >
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+              </select>
+              {disableDecks && <p className="mt-1 text-xs text-gray-500">Disabled when A to 9 is selected</p>}
             </div>
+
             <div>
-              <span className="text-gray-600">Surrender</span>
-              <div className="font-medium">Enabled</div>
-            </div>
-            <div>
-              <span className="text-gray-600">Soft 17 Rule</span>
-              <div className="font-medium">Dealer Hits</div>
-            </div>
-            <div>
-              <span className="text-gray-600">Mode</span>
-              <div className="font-medium">Perfect</div>
+              <label className="block text-sm text-gray-700 mb-1">Double allowed</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                value={doubleAllowed}
+                onChange={(e)=>setDoubleAllowed(e.target.value)}
+              >
+                <option value="any">Any</option>
+                <option value="9-11">9-11</option>
+                <option value="10-11">10-11</option>
+              </select>
             </div>
           </div>
-          <button className="mt-4 text-black text-sm hover:underline">
-            Modify Settings
+
+          <button
+            onClick={() => onStart(settings)}
+            className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800"
+          >
+            Start Blackjack
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          <button
+            onClick={() => onBack('home')}
+            className="w-full border border-gray-200 py-3 rounded-lg bg-white"
+          >
+            More games
+          </button>
+          <button
+            onClick={() => onBack('strategy')}
+            className="w-full border border-gray-200 py-3 rounded-lg bg-white flex items-center justify-center space-x-2"
+          >
+            <BookOpen size={18} className="text-gray-600" />
+            <span>Strategy chart</span>
           </button>
         </div>
       </main>
     </div>
   )
 }
+
+/* ---------------------------- Simple info pages ---------------------------- */
+
+function StatsPage({ onBack }) {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="Stats" onGo={onBack} showBack />
+      <main className="px-4 py-4 max-w-md mx-auto">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h2 className="text-base font-semibold text-gray-900 mb-2">Overview</h2>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-gray-600">Hands</span><span className="font-medium">0</span></div>
+            <div className="flex justify-between"><span className="text-gray-600">Accuracy</span><span className="font-medium">0%</span></div>
+            <div className="flex justify-between"><span className="text-gray-600">Streak</span><span className="font-medium">0</span></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+function AboutPage({ onBack }) {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="About" onGo={onBack} showBack />
+      <main className="px-4 py-4 max-w-md mx-auto">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-sm text-gray-700">
+          <p>Bet404 is a mobile first trainer for Blackjack and Spanish 21.</p>
+          <p>Use the Blackjack settings screen to set your table rules, then start training.</p>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+function SettingsPage({ onBack }) {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="App settings" onGo={onBack} showBack />
+      <main className="px-4 py-4 max-w-md mx-auto">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-700">Haptics</span>
+            <input type="checkbox" className="toggle toggle-sm" />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-700">Sound</span>
+            <input type="checkbox" className="toggle toggle-sm" />
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+/* --------------------------------- Home UI -------------------------------- */
+
+function Home({ onGo }) {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="Bet404" onGo={onGo} />
+      <main className="px-4 py-6 max-w-md mx-auto">
+        <div className="grid grid-cols-1 gap-4">
+          <button
+            onClick={() => onGo('blackjack')}
+            className="group bg-black text-white p-4 rounded-xl"
+          >
+            <div className="flex items-center space-x-3">
+              <Gamepad2 size={24} />
+              <div className="text-left">
+                <div className="font-medium">Blackjack</div>
+                <div className="text-xs text-gray-300">Set rules and start</div>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onGo('spanish21')}
+            className="group border border-gray-200 p-4 rounded-xl bg-white"
+          >
+            <div className="flex items-center space-x-3">
+              <Gamepad2 size={24} className="text-gray-500" />
+              <div className="text-left">
+                <div className="font-medium text-gray-900">Spanish 21</div>
+                <div className="text-xs text-gray-500">Rules coming soon</div>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onGo('more')}
+            className="group border border-gray-200 p-4 rounded-xl bg-white"
+          >
+            <div className="flex items-center space-x-3">
+              <Gamepad2 size={24} className="text-gray-500" />
+              <div className="text-left">
+                <div className="font-medium text-gray-900">More games</div>
+                <div className="text-xs text-gray-500">Browse extras</div>
+              </div>
+            </div>
+          </button>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+/* ------------------------------ Dashboard shell ----------------------------- */
+
+function Dashboard() {
+  const [route, setRoute] = useState('home') // home, blackjack, spanish21, stats, about, settings, strategy, play
+  const [pendingSettings, setPendingSettings] = useState(null)
+  const [activeGame, setActiveGame] = useState(null)
+
+  const go = (next) => setRoute(next)
+
+  const startBlackjack = (settings) => {
+    setPendingSettings(settings)
+    setActiveGame({ mode: 'custom', settings })
+    setRoute('play')
+  }
+
+  if (route === 'strategy') return <StrategyChartPage onBack={go} />
+  if (route === 'blackjack') return <BlackjackSettings onStart={startBlackjack} onBack={go} />
+  if (route === 'stats') return <StatsPage onBack={go} />
+  if (route === 'about') return <AboutPage onBack={go} />
+  if (route === 'settings') return <SettingsPage onBack={go} />
+  if (route === 'spanish21') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNav title="Spanish 21" onGo={go} showBack />
+        <main className="px-4 py-6 max-w-md mx-auto">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 text-sm text-gray-700">
+            Spanish 21 rules and training will be added soon.
+          </div>
+        </main>
+      </div>
+    )
+  }
+  if (route === 'more') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNav title="More games" onGo={go} showBack />
+        <main className="px-4 py-6 max-w-md mx-auto">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 text-sm text-gray-700">
+            More games will appear here.
+          </div>
+        </main>
+      </div>
+    )
+  }
+  if (route === 'play' && activeGame) {
+    return (
+      <GameTable
+        mode={activeGame.mode}
+        settings={pendingSettings}
+        onBack={() => { setActiveGame(null); setRoute('home') }}
+      />
+    )
+  }
+  return <Home onGo={go} />
+}
+
+/* ---------------------------------- App ---------------------------------- */
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -460,7 +694,7 @@ export default function App() {
   return (
     <>
       {user ? <Dashboard /> : <LoginScreen />}
-      <Toaster 
+      <Toaster
         position="top-center"
         gutter={8}
         toastOptions={{
@@ -476,18 +710,8 @@ export default function App() {
             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
             maxWidth: '320px',
           },
-          success: {
-            style: {
-              background: '#111827',
-            },
-            icon: '✓',
-          },
-          error: {
-            style: {
-              background: '#111827',
-            },
-            icon: '✕',
-          },
+          success: { style: { background: '#111827' }, icon: '✓' },
+          error: { style: { background: '#111827' }, icon: '✕' },
         }}
       />
     </>

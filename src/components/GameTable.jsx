@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
   Heart, Diamond, Club, Spade, 
   Eye, EyeOff, TrendingUp, AlertCircle, 
@@ -6,7 +6,28 @@ import {
   Zap, Shield, Split, DollarSign, Settings
 } from 'lucide-react'
 
-// Card Component with stunning animations
+console.log('GameTable loaded');
+
+if (!window.__fetchLoggerInstalled) {
+  const origFetch = window.fetch;
+  window.fetch = async (...args) => {
+    try {
+      console.log('[fetch] request', args[0]);
+      const res = await origFetch(...args);
+      const clone = res.clone();
+      let text = '';
+      try { text = await clone.text(); } catch {}
+      console.log('[fetch] response', res.status, text.slice(0, 300));
+      return res;
+    } catch (err) {
+      console.log('[fetch] network error', err);
+      throw err;
+    }
+  };
+  window.__fetchLoggerInstalled = true;
+}
+
+
 const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) => {
   const getSuitIcon = () => {
     switch(suit) {
@@ -17,7 +38,6 @@ const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) 
       default: return null
     }
   }
-
   const getColor = () => ['hearts', 'diamonds'].includes(suit) ? 'text-red-500' : 'text-gray-900'
 
   if (hidden) {
@@ -56,7 +76,6 @@ const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) 
   )
 }
 
-// Hand Value Display with animation
 const HandValue = ({ value, isBust, isBlackjack }) => {
   return (
     <div className={`
@@ -73,7 +92,6 @@ const HandValue = ({ value, isBust, isBlackjack }) => {
   )
 }
 
-// Action Button Component
 const ActionButton = ({ onClick, disabled, variant, children, icon: Icon }) => {
   const variants = {
     primary: 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white',
@@ -102,7 +120,6 @@ const ActionButton = ({ onClick, disabled, variant, children, icon: Icon }) => {
   )
 }
 
-// Stats Panel Component
 const StatsPanel = ({ stats, mode }) => {
   return (
     <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
@@ -132,26 +149,25 @@ const StatsPanel = ({ stats, mode }) => {
   )
 }
 
-// Hole Card Display Component
 const HoleCardDisplay = ({ card, mode, revealed }) => {
   const getBucketDisplay = (card) => {
     if (!card) return '?'
-    const value = card.value === 'A' ? 11 : 
-                  ['K', 'Q', 'J'].includes(card.value) ? 10 : 
-                  parseInt(card.value)
-    
+    if (card.hole_bucket) return card.hole_bucket
+    const v = card.value === 'A' ? 11 :
+              ['K','Q','J'].includes(card.value) ? 10 :
+              parseInt(card.value)
     if (mode === 'bucket4to10') {
-      if (value >= 4 && value <= 6) return '4-6'
-      if (value >= 7 && value <= 9) return '7-9'
-      if (value === 10) return '10'
-      return String(value)
+      if (v >= 4 && v <= 6) return '4-6'
+      if (v >= 7 && v <= 9) return '7-9'
+      if (v === 10) return '10'
+      return String(v)
     } else if (mode === 'bucket2to3') {
-      if (value >= 2 && value <= 3) return '2-3'
-      if (value >= 4 && value <= 6) return '4-6'
-      if (value >= 7 && value <= 9) return '7-9'
-      return String(value)
+      if (v >= 2 && v <= 3) return '2-3'
+      if (v >= 4 && v <= 6) return '4-6'
+      if (v >= 7 && v <= 9) return '7-9'
+      return String(v)
     }
-    return `${card.value}${card.suit[0].toUpperCase()}`
+    return `${card.value}${card.suit?.[0]?.toUpperCase() || ''}`
   }
 
   return (
@@ -176,9 +192,8 @@ const HoleCardDisplay = ({ card, mode, revealed }) => {
   )
 }
 
-// Main Game Table Component
 export default function GameTable({ mode = 'perfect', onBack }) {
-  const [gameState, setGameState] = useState('betting') // betting, playing, finished
+  const [gameState, setGameState] = useState('betting')
   const [deck, setDeck] = useState([])
   const [playerHand, setPlayerHand] = useState([])
   const [dealerHand, setDealerHand] = useState([])
@@ -189,111 +204,79 @@ export default function GameTable({ mode = 'perfect', onBack }) {
   const [message, setMessage] = useState('Place your bet to start')
   const [canDouble, setCanDouble] = useState(false)
   const [canSplit, setCanSplit] = useState(false)
-  const [stats, setStats] = useState({
-    handsPlayed: 0,
-    correctMoves: 0,
-    accuracy: 0,
-    streak: 0
-  })
-  const [lastAction, setLastAction] = useState(null)
+  const [stats, setStats] = useState({ handsPlayed: 0, correctMoves: 0, accuracy: 0, streak: 0 })
   const [showFeedback, setShowFeedback] = useState(false)
   const [isCorrect, setIsCorrect] = useState(null)
 
-  // Initialize deck
-  const initializeDeck = () => {
-    const suits = ['hearts', 'diamonds', 'clubs', 'spades']
-    const values = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
-    const newDeck = []
-    
-    // 6 deck shoe
-    for (let i = 0; i < 6; i++) {
-      for (const suit of suits) {
-        for (const value of values) {
-          newDeck.push({ value, suit })
-        }
-      }
-    }
-    
-    // Shuffle
-    for (let i = newDeck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]]
-    }
-    
-    return newDeck
-  }
-
-  // Calculate hand value
   const calculateHandValue = (hand) => {
     let value = 0
     let aces = 0
-    
     for (const card of hand) {
-      if (card.value === 'A') {
-        aces++
-        value += 11
-      } else if (['K', 'Q', 'J'].includes(card.value)) {
-        value += 10
-      } else {
-        value += parseInt(card.value)
-      }
+      if (card.value === 'A') { aces++; value += 11 }
+      else if (['K','Q','J'].includes(card.value)) value += 10
+      else value += parseInt(card.value)
     }
-    
-    while (value > 21 && aces > 0) {
-      value -= 10
-      aces--
-    }
-    
+    while (value > 21 && aces > 0) { value -= 10; aces-- }
     return value
   }
 
-  // Deal initial cards
-  const dealCards = () => {
-    const newDeck = [...deck]
-    const pHand = [newDeck.pop(), newDeck.pop()]
-    const dHand = [newDeck.pop()]
-    const holeCard = newDeck.pop()
-    
-    setPlayerHand(pHand)
-    setDealerHand(dHand)
-    setDealerHoleCard(holeCard)
-    setDeck(newDeck)
-    setGameState('playing')
-    setMessage('Make your move')
-    
-    // Check for player blackjack
-    const pValue = calculateHandValue(pHand)
-    if (pValue === 21) {
-      setMessage('Blackjack! You win!')
-      endHand(true)
-    } else {
-      // Check if can double/split
-      setCanDouble(true)
-      if (pHand[0].value === pHand[1].value) {
-        setCanSplit(true)
-      }
-    }
-  }
+  // Fetch a brand new hand and shoe from the API
+ const fetchNewHand = async () => {
+  console.log('fetchNewHand start');
+  try {
+    const res = await fetch('/api/deal_newhand', { method: 'GET' });
+    console.log('deal_newhand status:', res.status);
 
-  // Player actions
+    if (!res.ok) {
+      // read once on error only
+      const errText = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}. ${errText}`);
+    }
+
+    // read once on success
+    const data = await res.json();
+    console.log('deal_newhand data:', data);
+
+    const mapCard = c => ({ value: c.value || c.rank, suit: c.suit });
+    const pHand = (data.player_cards || []).map(mapCard);
+    const dCards = (data.dealer_cards || []).map(mapCard);
+    const remainingShoe = (data.shoe || []).map(mapCard);
+
+    setPlayerHand(pHand);
+    setDealerHand([dCards[0]]);
+    setDealerHoleCard(dCards[1]);
+    setDeck(remainingShoe);
+    setShowHoleCard(false);
+    setGameState('playing');
+    setMessage('Make your move');
+
+    const pValue = calculateHandValue(pHand);
+    setCanDouble(pValue >= 9 && pValue <= 11);
+    setCanSplit(pHand[0].value === pHand[1].value);
+  } catch (e) {
+    console.log('fetchNewHand error:', e);
+    setMessage(`Dealing service error, using local shoe. ${e.message || e}`);
+    // keep your local fallback here
+  }
+};
+
+
+  const dealCards = () => { 
+      console.log('Deal button clicked'); 
+fetchNewHand(); }
+
   const hit = () => {
+    if (deck.length === 0) return
     const newDeck = [...deck]
     const newCard = newDeck.pop()
     const newHand = [...playerHand, newCard]
-    
     setPlayerHand(newHand)
     setDeck(newDeck)
     setCanDouble(false)
     setCanSplit(false)
-    
     const value = calculateHandValue(newHand)
-    if (value > 21) {
-      setMessage('Bust! You lose.')
-      endHand(false)
-    } else if (value === 21) {
-      stand()
-    }
-    
+    if (value > 21) { setMessage('Bust! You lose.'); endHand(false) }
+    else if (value === 21) { stand() }
     checkCorrectMove('hit')
   }
 
@@ -304,29 +287,20 @@ export default function GameTable({ mode = 'perfect', onBack }) {
   }
 
   const double = () => {
-    if (!canDouble) return
-    
+    if (!canDouble || deck.length === 0) return
     const newDeck = [...deck]
     const newCard = newDeck.pop()
     const newHand = [...playerHand, newCard]
-    
     setPlayerHand(newHand)
     setDeck(newDeck)
-    
     const value = calculateHandValue(newHand)
-    if (value > 21) {
-      setMessage('Bust! You lose.')
-      endHand(false)
-    } else {
-      stand()
-    }
-    
+    if (value > 21) { setMessage('Bust! You lose.'); endHand(false) } else { stand() }
     checkCorrectMove('double')
   }
 
   const split = () => {
     if (!canSplit) return
-    // Implement split logic
+    // Your split logic can also draw from deck state
     checkCorrectMove('split')
   }
 
@@ -336,61 +310,32 @@ export default function GameTable({ mode = 'perfect', onBack }) {
     checkCorrectMove('surrender')
   }
 
-  // Dealer play
   const dealerPlay = () => {
     let dHand = [...dealerHand, dealerHoleCard]
     let dValue = calculateHandValue(dHand)
     let newDeck = [...deck]
-    
-    while (dValue < 17) {
-      const newCard = newDeck.pop()
-      dHand.push(newCard)
+    while (dValue < 17 && newDeck.length > 0) {
+      dHand.push(newDeck.pop())
       dValue = calculateHandValue(dHand)
     }
-    
     setDealerHand(dHand)
     setDeck(newDeck)
-    
     const pValue = calculateHandValue(playerHand)
-    
-    if (dValue > 21) {
-      setMessage('Dealer busts! You win!')
-      endHand(true)
-    } else if (dValue > pValue) {
-      setMessage('Dealer wins.')
-      endHand(false)
-    } else if (pValue > dValue) {
-      setMessage('You win!')
-      endHand(true)
-    } else {
-      setMessage('Push!')
-      endHand(null)
-    }
+    if (dValue > 21) { setMessage('Dealer busts! You win!'); endHand(true) }
+    else if (dValue > pValue) { setMessage('Dealer wins.'); endHand(false) }
+    else if (pValue > dValue) { setMessage('You win!'); endHand(true) }
+    else { setMessage('Push!'); endHand(null) }
   }
 
-  // Check if move was correct (simplified - implement full strategy)
   const checkCorrectMove = (action) => {
-    // This would connect to your backend strategy checker
-    // For now, simplified logic
-    const dealerUp = dealerHand[0].value
     const playerVal = calculateHandValue(playerHand)
-    
-    // Simplified basic strategy check
     let correct = false
-    if (playerVal >= 17) {
-      correct = action === 'stand'
-    } else if (playerVal <= 11) {
-      correct = action === 'hit' || (playerVal === 11 && action === 'double')
-    } else {
-      // More complex logic based on dealer up card
-      correct = true // Placeholder
-    }
-    
+    if (playerVal >= 17) correct = action === 'stand'
+    else if (playerVal <= 11) correct = action === 'hit' || (playerVal === 11 && action === 'double')
+    else correct = true
     setIsCorrect(correct)
     setShowFeedback(true)
     setTimeout(() => setShowFeedback(false), 2000)
-    
-    // Update stats
     setStats(prev => ({
       ...prev,
       handsPlayed: prev.handsPlayed + 1,
@@ -400,34 +345,22 @@ export default function GameTable({ mode = 'perfect', onBack }) {
     }))
   }
 
-  // End hand
-  const endHand = (won) => {
+  const endHand = () => {
     setGameState('finished')
     setShowHoleCard(true)
   }
 
-  // New game
   const newGame = () => {
-    const newDeck = initializeDeck()
-    setDeck(newDeck)
     setPlayerHand([])
     setDealerHand([])
     setDealerHoleCard(null)
     setShowHoleCard(false)
     setGameState('betting')
     setMessage('Place your bet to start')
-    setCanDouble(false)
-    setCanSplit(false)
+    setIsCorrect(null)
     setShowFeedback(false)
   }
 
-  // Initialize game
-  useEffect(() => {
-    const newDeck = initializeDeck()
-    setDeck(newDeck)
-  }, [])
-
-  // Update hand values
   useEffect(() => {
     setPlayerValue(calculateHandValue(playerHand))
     setDealerValue(calculateHandValue(showHoleCard ? [...dealerHand, dealerHoleCard].filter(Boolean) : dealerHand))
@@ -435,22 +368,16 @@ export default function GameTable({ mode = 'perfect', onBack }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-900 to-black">
-      {/* Animated background pattern */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute inset-0 bg-[repeating-conic-gradient(from_0deg_at_50%_50%,transparent_0deg,rgba(255,255,255,0.1)_20deg,transparent_40deg)]"></div>
       </div>
 
-      {/* Header */}
       <header className="relative z-10 bg-black/30 backdrop-blur-md border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <button
-            onClick={onBack}
-            className="text-white hover:text-gray-300 transition-colors flex items-center space-x-2"
-          >
+          <button onClick={onBack} className="text-white hover:text-gray-300 transition-colors flex items-center space-x-2">
             <RotateCcw className="w-5 h-5" />
             <span>Back to Dashboard</span>
           </button>
-          
           <div className="flex items-center space-x-6">
             <div className="text-white">
               <span className="text-sm text-white/60">Mode: </span>
@@ -465,33 +392,19 @@ export default function GameTable({ mode = 'perfect', onBack }) {
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Main Game Area */}
           <div className="lg:col-span-3">
-            {/* Dealer Area */}
             <div className="mb-8">
               <div className="text-center mb-4">
                 <h2 className="text-white/60 text-sm font-semibold mb-2">DEALER</h2>
                 {dealerHand.length > 0 && (
-                  <HandValue 
-                    value={dealerValue} 
-                    isBust={dealerValue > 21}
-                    isBlackjack={dealerValue === 21 && dealerHand.length === 2}
-                  />
+                  <HandValue value={dealerValue} isBust={dealerValue > 21} isBlackjack={dealerValue === 21 && dealerHand.length === 2} />
                 )}
               </div>
               <div className="flex justify-center space-x-3">
-                {dealerHand.map((card, idx) => (
-                  <Card key={idx} {...card} />
-                ))}
-                {dealerHoleCard && !showHoleCard && (
-                  <Card hidden />
-                )}
-                {dealerHoleCard && showHoleCard && (
-                  <Card {...dealerHoleCard} highlight />
-                )}
+                {dealerHand.map((card, idx) => (<Card key={idx} {...card} />))}
+                {dealerHoleCard && !showHoleCard && (<Card hidden />)}
+                {dealerHoleCard && showHoleCard && (<Card {...dealerHoleCard} highlight />)}
               </div>
-              
-              {/* Hole Card Info for training modes */}
               {dealerHoleCard && mode !== 'normal' && !showHoleCard && (
                 <div className="flex justify-center mt-4">
                   <HoleCardDisplay card={dealerHoleCard} mode={mode} revealed={showHoleCard} />
@@ -499,17 +412,12 @@ export default function GameTable({ mode = 'perfect', onBack }) {
               )}
             </div>
 
-            {/* Message Area */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center px-6 py-3 bg-black/30 backdrop-blur-md rounded-full border border-white/20">
                 <span className="text-white font-semibold text-lg">{message}</span>
               </div>
-              
-              {/* Feedback for correct/incorrect moves */}
               {showFeedback && (
-                <div className={`mt-4 inline-flex items-center px-4 py-2 rounded-full ${
-                  isCorrect ? 'bg-green-500/30 border border-green-500' : 'bg-red-500/30 border border-red-500'
-                }`}>
+                <div className={`mt-4 inline-flex items-center px-4 py-2 rounded-full ${isCorrect ? 'bg-green-500/30 border border-green-500' : 'bg-red-500/30 border border-red-500'}`}>
                   {isCorrect ? (
                     <>
                       <CheckCircle className="w-5 h-5 text-green-400 mr-2" />
@@ -525,92 +433,51 @@ export default function GameTable({ mode = 'perfect', onBack }) {
               )}
             </div>
 
-            {/* Player Area */}
             <div className="mb-8">
               <div className="flex justify-center space-x-3 mb-4">
-                {playerHand.map((card, idx) => (
-                  <Card key={idx} {...card} />
-                ))}
+                {playerHand.map((card, idx) => (<Card key={idx} {...card} />))}
               </div>
               <div className="text-center">
                 <h2 className="text-white/60 text-sm font-semibold mb-2">PLAYER</h2>
                 {playerHand.length > 0 && (
-                  <HandValue 
-                    value={playerValue} 
-                    isBust={playerValue > 21}
-                    isBlackjack={playerValue === 21 && playerHand.length === 2}
-                  />
+                  <HandValue value={playerValue} isBust={playerValue > 21} isBlackjack={playerValue === 21 && playerHand.length === 2} />
                 )}
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex justify-center">
               {gameState === 'betting' && (
-                <ActionButton 
-                  onClick={dealCards} 
-                  variant="primary"
-                  icon={PlayCircle}
-                >
+                <ActionButton onClick={dealCards} variant="primary" icon={PlayCircle}>
                   Deal Cards
                 </ActionButton>
               )}
-              
               {gameState === 'playing' && (
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                  <ActionButton onClick={hit} variant="primary">
-                    Hit
-                  </ActionButton>
-                  <ActionButton onClick={stand} variant="secondary">
-                    Stand
-                  </ActionButton>
-                  <ActionButton 
-                    onClick={double} 
-                    disabled={!canDouble}
-                    variant="warning"
-                    icon={DollarSign}
-                  >
-                    Double
-                  </ActionButton>
-                  <ActionButton 
-                    onClick={split} 
-                    disabled={!canSplit}
-                    variant="warning"
-                    icon={Split}
-                  >
-                    Split
-                  </ActionButton>
-                  <ActionButton onClick={surrender} variant="danger">
-                    Surrender
-                  </ActionButton>
+                  <ActionButton onClick={hit} variant="primary">Hit</ActionButton>
+                  <ActionButton onClick={stand} variant="secondary">Stand</ActionButton>
+                  <ActionButton onClick={double} disabled={!canDouble} variant="warning" icon={DollarSign}>Double</ActionButton>
+                  <ActionButton onClick={split} disabled={!canSplit} variant="warning" icon={Split}>Split</ActionButton>
+                  <ActionButton onClick={surrender} variant="danger">Surrender</ActionButton>
                 </div>
               )}
-              
               {gameState === 'finished' && (
-                <ActionButton 
-                  onClick={newGame} 
-                  variant="primary"
-                  icon={RotateCcw}
-                >
+                <ActionButton onClick={newGame} variant="primary" icon={RotateCcw}>
                   New Hand
                 </ActionButton>
               )}
             </div>
           </div>
 
-          {/* Stats Panel */}
           <div className="lg:col-span-1">
             <StatsPanel stats={stats} mode={mode} />
-            
-            {/* Strategy Hints (optional) */}
             <div className="mt-6 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
               <h3 className="text-white font-semibold mb-3 flex items-center">
                 <AlertCircle className="w-5 h-5 mr-2" />
                 Strategy Tip
               </h3>
               <p className="text-white/80 text-sm">
-                {playerValue < 12 ? "You can't bust - consider hitting" :
-                 playerValue >= 17 ? "Strong hand - consider standing" :
+                {playerValue < 12 ? "You can't bust, consider hitting" :
+                 playerValue >= 17 ? "Strong hand, consider standing" :
                  "Consider the dealer's up card"}
               </p>
             </div>
@@ -618,16 +485,13 @@ export default function GameTable({ mode = 'perfect', onBack }) {
         </div>
       </div>
 
-      {/* Add shake animation for bust */}
-      <style jsx>{`
+      <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           25% { transform: translateX(-5px); }
           75% { transform: translateX(5px); }
         }
-        .animate-shake {
-          animation: shake 0.5s ease-in-out;
-        }
+        .animate-shake { animation: shake 0.5s ease-in-out; }
       `}</style>
     </div>
   )
