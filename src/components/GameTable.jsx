@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { 
   Heart, Diamond, Club, Spade, 
-  Eye, EyeOff, TrendingUp, AlertCircle, 
+  Eye, TrendingUp, AlertCircle, 
   RotateCcw, PlayCircle, XCircle, CheckCircle,
-  Zap, Shield, Split, DollarSign, Settings
+  Zap, Split, DollarSign, Settings
 } from 'lucide-react'
 
 console.log('GameTable loaded');
@@ -27,6 +27,7 @@ if (!window.__fetchLoggerInstalled) {
   window.__fetchLoggerInstalled = true;
 }
 
+const gradeEndpoint = '/api/grade_decision';
 
 const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) => {
   const getSuitIcon = () => {
@@ -55,8 +56,6 @@ const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) 
         <div className={`${getColor()} font-bold ${mini ? 'text-xs' : 'text-lg'}`}>{value}</div>
         {getSuitIcon()}
         <div className={`${getColor()} font-bold ${mini ? 'text-xs' : 'text-lg'}`}>{value}</div>
-        
-        {/* Special indicator overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-purple-700/20 rounded-lg"></div>
         <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-1">
           <Eye className="w-3 h-3 text-white" />
@@ -158,48 +157,7 @@ const StatsPanel = ({ stats, mode }) => {
   )
 }
 
-const HoleCardDisplay = ({ card, mode, revealed }) => {
-  const getBucketDisplay = (card) => {
-    if (!card) return '?'
-    if (card.hole_bucket) return card.hole_bucket
-    const v = card.value === 'A' ? 11 :
-              ['K','Q','J'].includes(card.value) ? 10 :
-              parseInt(card.value)
-    if (mode === 'bucket4to10') {
-      if (v >= 4 && v <= 6) return '4-6'
-      if (v >= 7 && v <= 9) return '7-9'
-      if (v === 10) return '10'
-      return String(v)
-    } else if (mode === 'bucket2to3') {
-      if (v >= 2 && v <= 3) return '2-3'
-      if (v >= 4 && v <= 6) return '4-6'
-      if (v >= 7 && v <= 9) return '7-9'
-      return String(v)
-    }
-    return `${card.value}${card.suit?.[0]?.toUpperCase() || ''}`
-  }
-
-  return (
-    <div className="relative">
-      {mode === 'perfect' || revealed ? (
-        <Card {...card} mini highlight />
-      ) : (
-        <div className="w-12 h-16 bg-gradient-to-br from-purple-600 to-purple-800 
-          rounded-lg shadow-xl flex items-center justify-center
-          border-2 border-purple-400 transform transition-all duration-300">
-          <div className="text-white font-bold text-xs">
-            {getBucketDisplay(card)}
-          </div>
-        </div>
-      )}
-      {!revealed && mode !== 'perfect' && (
-        <div className="absolute -top-2 -right-2 bg-purple-500 rounded-full p-1">
-          <Eye className="w-3 h-3 text-white" />
-        </div>
-      )}
-    </div>
-  )
-}
+const HoleCardDisplay = ({ card, mode, revealed }) => null
 
 export default function GameTable({ mode = 'perfect', onBack }) {
   const [gameState, setGameState] = useState('betting')
@@ -211,169 +169,162 @@ export default function GameTable({ mode = 'perfect', onBack }) {
   const [playerValue, setPlayerValue] = useState(0)
   const [dealerValue, setDealerValue] = useState(0)
   const [message, setMessage] = useState('Place your bet to start')
-  const [canDouble, setCanDouble] = useState(false)
-  const [canSplit, setCanSplit] = useState(false)
   const [stats, setStats] = useState({ handsPlayed: 0, correctMoves: 0, accuracy: 0, streak: 0 })
   const [showFeedback, setShowFeedback] = useState(false)
   const [isCorrect, setIsCorrect] = useState(null)
+
+  // training states
+  const [initialDeal, setInitialDeal] = useState(null)
+  const [handId, setHandId] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  // normalize to keep ranks consistent and make tens a single letter if needed
+  const normalizeRank = (v) => {
+    if (!v) return v
+    const s = String(v).toUpperCase()
+    return s === '10' ? 'T' : s
+  }
+
+  const isTenValue = (v) => ['T','J','Q','K'].includes(v)
+
+  const mapCard = (c) => ({ value: normalizeRank(c.value || c.rank), suit: c.suit })
 
   const calculateHandValue = (hand) => {
     let value = 0
     let aces = 0
     for (const card of hand) {
       if (card.value === 'A') { aces++; value += 11 }
-      else if (['K','Q','J'].includes(card.value)) value += 10
-      else value += parseInt(card.value)
+      else if (['T','K','Q','J'].includes(card.value)) value += 10
+      else value += parseInt(card.value, 10)
     }
     while (value > 21 && aces > 0) { value -= 10; aces-- }
     return value
   }
 
-  // Fetch a brand new hand and shoe from the API
- const fetchNewHand = async () => {
-  console.log('fetchNewHand start');
-  try {
-    const res = await fetch('/api/deal_newhand', { method: 'GET' });
-    console.log('deal_newhand status:', res.status);
+  // map frontend action to backend action names if required
+  const toBackendAction = (a) => (
+    a === 'double' ? 'double_down' :
+    a === 'split'  ? 'split_pairs' :
+    a
+  )
 
-    if (!res.ok) {
-      // read once on error only
-      const errText = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}. ${errText}`);
+  // Fetch a brand new hand
+  const fetchNewHand = async () => {
+    console.log('fetchNewHand start');
+    try {
+      const res = await fetch('/api/deal_newhand', { method: 'GET' });
+      console.log('deal_newhand status:', res.status);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}. ${errText}`);
+      }
+
+      const data = await res.json();
+      console.log('deal_newhand data:', data);
+
+      const pHand = (data.player_cards || []).map(mapCard);
+      const dCards = (data.dealer_cards || []).map(mapCard);
+      const remainingShoe = (data.shoe || []).map(mapCard);
+
+      const snapshot = {
+        player_cards: pHand,
+        dealer_upcard: dCards?.[0] || null,
+        dealer_hole_card: dCards?.[1] || null,
+        settings: data.settings || null
+      };
+      setInitialDeal(snapshot);
+      setHandId(data.hand_id || null);
+
+      setPlayerHand(pHand);
+      setDealerHand([dCards[0]].filter(Boolean));
+      setDealerHoleCard(dCards[1] || null);
+      setDeck(remainingShoe);
+      setShowHoleCard(false);
+      setGameState('playing');
+      setMessage('Make your move');
+
+    } catch (e) {
+      console.log('fetchNewHand error:', e);
+      setMessage(`Dealing service error, using local shoe. ${e.message || e}`);
     }
-
-    // read once on success
-    const data = await res.json();
-    console.log('deal_newhand data:', data);
-
-    const mapCard = c => ({ value: c.value || c.rank, suit: c.suit });
-    const pHand = (data.player_cards || []).map(mapCard);
-    const dCards = (data.dealer_cards || []).map(mapCard);
-    const remainingShoe = (data.shoe || []).map(mapCard);
-
-    setPlayerHand(pHand);
-    setDealerHand([dCards[0]]);
-    setDealerHoleCard(dCards[1]);
-    setDeck(remainingShoe);
-    setShowHoleCard(false);
-    setGameState('playing');
-    setMessage('Make your move');
-
-    const pValue = calculateHandValue(pHand);
-    setCanDouble(pValue >= 9 && pValue <= 11);
-    setCanSplit(pHand[0].value === pHand[1].value);
-  } catch (e) {
-    console.log('fetchNewHand error:', e);
-    setMessage(`Dealing service error, using local shoe. ${e.message || e}`);
-    // keep your local fallback here
-  }
-};
-
+  };
 
   const dealCards = () => { 
-      console.log('Deal button clicked'); 
-fetchNewHand(); }
-
-  const hit = () => {
-    if (deck.length === 0) return
-    const newDeck = [...deck]
-    const newCard = newDeck.pop()
-    const newHand = [...playerHand, newCard]
-    setPlayerHand(newHand)
-    setDeck(newDeck)
-    setCanDouble(false)
-    setCanSplit(false)
-    const value = calculateHandValue(newHand)
-    if (value > 21) { setMessage('Bust! You lose.'); endHand(false) }
-    else if (value === 21) { stand() }
-    checkCorrectMove('hit')
+    console.log('Deal button clicked'); 
+    fetchNewHand();
   }
 
-  const stand = () => {
-    setShowHoleCard(true)
-    dealerPlay()
-    checkCorrectMove('stand')
-  }
+  // Training flow: send action to backend, show grade, then new hand
+  const sendDecisionForGrading = async (action) => {
+    if (!initialDeal) return;
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const payload = {
+        hand_id: handId,
+        action: toBackendAction(action),
+        initial_cards: {
+          player_cards: initialDeal.player_cards,
+          dealer_upcard: initialDeal.dealer_upcard,
+          dealer_hole_card: initialDeal.dealer_hole_card
+        },
+        settings: initialDeal.settings,
+        mode
+      };
 
-  const double = () => {
-    if (!canDouble || deck.length === 0) return
-    const newDeck = [...deck]
-    const newCard = newDeck.pop()
-    const newHand = [...playerHand, newCard]
-    setPlayerHand(newHand)
-    setDeck(newDeck)
-    const value = calculateHandValue(newHand)
-    if (value > 21) { setMessage('Bust! You lose.'); endHand(false) } else { stand() }
-    checkCorrectMove('double')
-  }
+      const res = await fetch(gradeEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-  const split = () => {
-    if (!canSplit) return
-    // Your split logic can also draw from deck state
-    checkCorrectMove('split')
-  }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
 
-  const surrender = () => {
-    setMessage('Surrendered. Half bet returned.')
-    endHand(false)
-    checkCorrectMove('surrender')
-  }
+      const correct = Boolean(result.correct);
+      setIsCorrect(correct);
+      setShowFeedback(true);
+      setTimeout(() => setShowFeedback(false), 1200);
 
-  const dealerPlay = () => {
-    let dHand = [...dealerHand, dealerHoleCard]
-    let dValue = calculateHandValue(dHand)
-    let newDeck = [...deck]
-    while (dValue < 17 && newDeck.length > 0) {
-      dHand.push(newDeck.pop())
-      dValue = calculateHandValue(dHand)
+      setStats(prev => {
+        const hands = prev.handsPlayed + 1;
+        const correctMoves = prev.correctMoves + (correct ? 1 : 0);
+        return {
+          handsPlayed: hands,
+          correctMoves,
+          accuracy: Math.round((correctMoves / hands) * 100),
+          streak: correct ? prev.streak + 1 : 0
+        };
+      });
+
+    } catch (e) {
+      console.error('grading error', e);
+      setMessage('Could not grade that action. Try again');
+    } finally {
+      setSubmitting(false);
+      await fetchNewHand();
     }
-    setDealerHand(dHand)
-    setDeck(newDeck)
-    const pValue = calculateHandValue(playerHand)
-    if (dValue > 21) { setMessage('Dealer busts! You win!'); endHand(true) }
-    else if (dValue > pValue) { setMessage('Dealer wins.'); endHand(false) }
-    else if (pValue > dValue) { setMessage('You win!'); endHand(true) }
-    else { setMessage('Push!'); endHand(null) }
-  }
+  };
 
-  const checkCorrectMove = (action) => {
-    const playerVal = calculateHandValue(playerHand)
-    let correct = false
-    if (playerVal >= 17) correct = action === 'stand'
-    else if (playerVal <= 11) correct = action === 'hit' || (playerVal === 11 && action === 'double')
-    else correct = true
-    setIsCorrect(correct)
-    setShowFeedback(true)
-    setTimeout(() => setShowFeedback(false), 2000)
-    setStats(prev => ({
-      ...prev,
-      handsPlayed: prev.handsPlayed + 1,
-      correctMoves: prev.correctMoves + (correct ? 1 : 0),
-      accuracy: Math.round(((prev.correctMoves + (correct ? 1 : 0)) / (prev.handsPlayed + 1)) * 100),
-      streak: correct ? prev.streak + 1 : 0
-    }))
-  }
+  // Buttons always enabled during play, only blocked while submitting
+  const onHit = () => sendDecisionForGrading('hit');
+  const onStand = () => sendDecisionForGrading('stand');
+  const onDouble = () => sendDecisionForGrading('double');
+  const onSplit = () => sendDecisionForGrading('split');
+  const onSurrender = () => sendDecisionForGrading('surrender');
 
-  const endHand = () => {
-    setGameState('finished')
-    setShowHoleCard(true)
-  }
-
-  const newGame = () => {
-    setPlayerHand([])
-    setDealerHand([])
-    setDealerHoleCard(null)
-    setShowHoleCard(false)
-    setGameState('betting')
-    setMessage('Place your bet to start')
-    setIsCorrect(null)
-    setShowFeedback(false)
-  }
-
+  // Values for UI only
   useEffect(() => {
     setPlayerValue(calculateHandValue(playerHand))
     setDealerValue(calculateHandValue(showHoleCard ? [...dealerHand, dealerHoleCard].filter(Boolean) : dealerHand))
   }, [playerHand, dealerHand, dealerHoleCard, showHoleCard])
+
+  // Optional relaxed split logic if you want to display a tip or icon somewhere
+  const canShowSplitTip = playerHand[0] && playerHand[1] && (
+    playerHand[0].value === playerHand[1].value ||
+    (isTenValue(playerHand[0].value) && isTenValue(playerHand[1].value))
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-900 to-black">
@@ -414,11 +365,6 @@ fetchNewHand(); }
                 {dealerHoleCard && !showHoleCard && (<Card {...dealerHoleCard} hidden />)}
                 {dealerHoleCard && showHoleCard && (<Card {...dealerHoleCard} highlight />)}
               </div>
-              {dealerHoleCard && mode !== 'normal' && !showHoleCard && (
-                <div className="flex justify-center mt-4">
-                  <HoleCardDisplay card={dealerHoleCard} mode={mode} revealed={showHoleCard} />
-                </div>
-              )}
             </div>
 
             <div className="text-center mb-8">
@@ -430,7 +376,7 @@ fetchNewHand(); }
                   {isCorrect ? (
                     <>
                       <CheckCircle className="w-5 h-5 text-green-400 mr-2" />
-                      <span className="text-green-400 font-semibold">Correct!</span>
+                      <span className="text-green-400 font-semibold">Correct</span>
                     </>
                   ) : (
                     <>
@@ -451,6 +397,11 @@ fetchNewHand(); }
                 {playerHand.length > 0 && (
                   <HandValue value={playerValue} isBust={playerValue > 21} isBlackjack={playerValue === 21 && playerHand.length === 2} />
                 )}
+                {canShowSplitTip && (
+                  <div className="mt-2 text-xs text-white/70">
+                    Split candidate
+                  </div>
+                )}
               </div>
             </div>
 
@@ -462,15 +413,15 @@ fetchNewHand(); }
               )}
               {gameState === 'playing' && (
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                  <ActionButton onClick={hit} variant="primary">Hit</ActionButton>
-                  <ActionButton onClick={stand} variant="secondary">Stand</ActionButton>
-                  <ActionButton onClick={double} disabled={!canDouble} variant="warning" icon={DollarSign}>Double</ActionButton>
-                  <ActionButton onClick={split} disabled={!canSplit} variant="warning" icon={Split}>Split</ActionButton>
-                  <ActionButton onClick={surrender} variant="danger">Surrender</ActionButton>
+                  <ActionButton onClick={onHit} disabled={submitting} variant="primary">Hit</ActionButton>
+                  <ActionButton onClick={onStand} disabled={submitting} variant="secondary">Stand</ActionButton>
+                  <ActionButton onClick={onDouble} disabled={submitting} variant="warning" icon={DollarSign}>Double</ActionButton>
+                  <ActionButton onClick={onSplit} disabled={submitting} variant="warning" icon={Split}>Split</ActionButton>
+                  <ActionButton onClick={onSurrender} disabled={submitting} variant="danger">Surrender</ActionButton>
                 </div>
               )}
               {gameState === 'finished' && (
-                <ActionButton onClick={newGame} variant="primary" icon={RotateCcw}>
+                <ActionButton onClick={dealCards} variant="primary" icon={RotateCcw}>
                   New Hand
                 </ActionButton>
               )}
@@ -497,7 +448,7 @@ fetchNewHand(); }
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }¸
+          25% { transform: translateX(-5px); }
           75% { transform: translateX(5px); }
         }
         .animate-shake { animation: shake 0.5s ease-in-out; }
