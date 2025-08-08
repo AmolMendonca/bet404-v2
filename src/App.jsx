@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { Toaster } from 'react-hot-toast'
+import toast, { Toaster } from 'react-hot-toast'
 import { useAuth } from './hooks/useAuth'
+import GameTable from './components/GameTable'
 import { Eye, EyeOff, LogOut, Settings, BarChart3, Target, TrendingUp, Clock, Award, PlayCircle } from 'lucide-react'
 
 function LoginScreen() {
@@ -163,6 +164,7 @@ function LoginScreen() {
 function Dashboard() {
   const { user, signOut } = useAuth()
   const [showStats, setShowStats] = useState(false)
+  const [activeGame, setActiveGame] = useState(null) // ADD THIS LINE
   
   // Mock user statistics - in real app this would come from your database
   const stats = {
@@ -189,8 +191,12 @@ function Dashboard() {
   }
 
   const startTraining = (mode = 'perfect') => {
-    // In real app: navigate to training view with selected mode
-    console.log(`Starting training in ${mode} mode`)
+    setActiveGame(mode) // CHANGE THIS LINE
+  }
+
+  // ADD THIS: If in game, show game table
+  if (activeGame) {
+    return <GameTable mode={activeGame} onBack={() => setActiveGame(null)} />
   }
 
   return (
