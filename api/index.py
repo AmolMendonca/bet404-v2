@@ -1,27 +1,23 @@
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, jsonify
+# Load environment variables before importing anything else
+from dotenv import load_dotenv
+load_dotenv()
 
-app = Flask(__name__)
-
-@app.route('/')
-@app.route('/<path:path>')
-def debug_handler(path=''):
-    try:
-        # Try to import your backend
-        from backend.app import create_app
-        backend_app = create_app()
-        
-        # Try to handle the request with your backend app
-        with backend_app.test_request_context():
-            return backend_app.full_dispatch_request()
-            
-    except Exception as e:
+try:
+    from backend.app import create_app
+    app = create_app()
+except Exception as e:
+    from flask import Flask, jsonify
+    app = Flask(__name__)
+    
+    @app.route('/')
+    @app.route('/<path:path>')
+    def error(path=''):
         return jsonify({
             "error": str(e),
+            "error_type": type(e).__name__,
             "path": path,
-            "sys_path": sys.path,
-            "cwd": os.getcwd(),
-            "files": os.listdir('.')
-        }), 500
+            "env_vars": {k: v for k, v in os.environ.items() if 'DATABASE' in k}
+        })
