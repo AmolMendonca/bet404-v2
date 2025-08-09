@@ -1,0 +1,4 @@
+flask
+python-dotenv
+psycopg2-binary   # keep if you use Postgres; remove if you use sqlite
+supabase          # keep if you use the Supabase python client
