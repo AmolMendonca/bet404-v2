@@ -69,19 +69,20 @@ export function useAuth() {
     }
   }
 
-  const signOut = async () => {
-    try {
-      setLoading(true)
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
-      toast.success('Signed out')
-    } catch (error) {
-      toast.error('Error signing out')
-    } finally {
-      setLoading(false)
-    }
+const signOut = async () => {
+  try {
+    setLoading(true)
+    // Explicitly use local scope to override the global default
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
+    if (error) throw error
+    toast.success('Signed out')
+  } catch (error) {
+    console.error('SignOut error:', error)
+    toast.error('Error signing out')
+  } finally {
+    setLoading(false)
   }
-
+}
   const resetPassword = async (email) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email)
