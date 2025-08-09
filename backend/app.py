@@ -1,4 +1,3 @@
-
 import os
 from flask import Flask
 from config import DATABASE_URL
