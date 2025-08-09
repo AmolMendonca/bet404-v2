@@ -1,11 +1,12 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite",
   "functions": {
-    "api/app.py": { "runtime": "python3.11" }
+    "api/**/*.py": { "runtime": "python3.11" }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/app.py" }
+    { "source": "/api/(.*)", "destination": "/api/$1" }
   ]
 }
