@@ -212,56 +212,136 @@ function LoginScreen() {
 /* ------------------------- Strategy chart page (lite) ------------------------- */
 
 function StrategyChartPage({ onBack }) {
-  const [activeChart, setActiveChart] = useState('hard')
-  const [showLegend, setShowLegend] = useState(false)
-  const [rule] = useState('H17')
-  const [bucket, setBucket] = useState('4to10')
-  const [editable, setEditable] = useState(true)
+  const [activeChart, setActiveChart] = React.useState('hard')
+  const [showLegend, setShowLegend] = React.useState(false)
+  const [rule] = React.useState('H17')
+  const [bucket, setBucket] = React.useState('4to10')
+  const [editable, setEditable] = React.useState(true)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState(null)
 
-  const dealerCards = ['2','3','4','5','6','7','8','9','T','A']
+  const dealerCards = ['2','3','4','5','6','7','8','9','10','A']
 
-  const seedHard = {
-    '7': ['H','H','H','H','H','H','H','H','H','H'],
-    '8': ['H','H','H','H','D','H','H','H','H','H'],
-    '9': ['H','H','D','D','D','D','D','D','H','H'],
-    '10, 11': ['D','D','D','D','D','D','D','D','D','H'],
-    '12': ['H','H','H','S','S','S','H','H','H','H'],
-    '13': ['H','S','S','S','S','S','S','H','H','H'],
-    '14': ['H','S','S','S','S','S','S','H','H','H'],
-    '15': ['S','S','S','S','S','S','S','S','H','RH/H'],
-    '16': ['S','S','S','S','S','S','S','S','H','RH'],
-    '17': ['S','S','S','S','S','S','S','S','S','RS'],
-    '18': ['S','S','S','S','S','S','S','S','S','S'],
-    'A2': ['H','H','H','D','D','H','H','H','H','H'],
-    'A3, A4': ['H','H','H','H','D','D','D','H','H','H'],
-    'A5': ['H','H','H','D','D','D','D','H','H','H'],
-    'A6': ['H','H','H','D','D','D','D','D','H','H'],
-    'A7': ['S','S','DS','DS','DS','DS','DS','S','H'],
-    'A8': ['S','S','S','S','DS','S','S','S','S','S'],
-    '22': ['H','H','H','P','P','P','P','P','H','H'],
-    '33': ['H','H','H','P','P','P','P','P','H','H'],
-    '44': ['H','H','H','H','P','P','H','H','H','H'],
-    '55': ['D','D','D','D','D','D','D','D','D','H'],
-    '66': ['H','H','H','P','P','P','P','P','H','H'],
-    '77': ['P','P','P','P','P','P','P','P','P','H'],
-    '88': ['P','P','P','P','P','P','P','P','P','RH/PRH'],
-    '99': ['S','P','P','P','P','P','P','P','P','P'],
-    'TT': ['S','S','S','S','S','S','S','S','S','S'],
-    'AA': ['P','P','P','P','P','P','P','P','P','P'],
+  // Initialize with empty charts
+  const [charts, setCharts] = React.useState({ H17: { '4to10': { hard: {} } } })
+
+  // Function to fetch chart data from API
+  const fetchChartData = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await fetch('/api/4to10_chart')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const data = await response.json()
+      
+      // Transform API data into chart format
+      const transformedChart = transformApiDataToChart(data)
+      
+      setCharts({
+        H17: {
+          '4to10': {
+            hard: transformedChart
+          }
+        }
+      })
+    } catch (err) {
+      console.error('Error fetching chart data:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const table = seedHard
+  // Transform API response to chart format
+  const transformApiDataToChart = (apiData) => {
+    const chart = {}
+    
+    // Process pair entries
+    apiData.pair_entries?.forEach(entry => {
+      const { dealer_val, player_pair, recommended_move } = entry
+      const rowKey = player_pair // e.g., "20", "22", "33", etc.
+      
+      if (!chart[rowKey]) {
+        chart[rowKey] = new Array(10).fill('H') // Initialize with 'H' for all dealer cards
+      }
+      
+      // Map dealer value to index
+      const dealerIndex = getDealerIndex(dealer_val)
+      if (dealerIndex !== -1) {
+        chart[rowKey][dealerIndex] = recommended_move
+      }
+    })
+    
+    // Process regular entries
+    apiData.regular_entries?.forEach(entry => {
+      const { dealer_val, player_hand_type, player_val, recommended_move } = entry
+      
+      // Create row key based on hand type and value
+      let rowKey
+      if (player_hand_type === 'soft') {
+        // For soft hands, use format like "A2", "A3", etc.
+        const aceValue = player_val - 11 // Convert soft total to ace value
+        if (aceValue >= 2 && aceValue <= 9) {
+          rowKey = `A${aceValue}`
+        }
+      } else {
+        // For hard hands, use the value directly
+        rowKey = player_val.toString()
+      }
+      
+      if (rowKey && !chart[rowKey]) {
+        chart[rowKey] = new Array(10).fill('H') // Initialize with 'H' for all dealer cards
+      }
+      
+      if (rowKey) {
+        const dealerIndex = getDealerIndex(dealer_val)
+        if (dealerIndex !== -1) {
+          chart[rowKey][dealerIndex] = recommended_move
+        }
+      }
+    })
+    
+    return chart
+  }
 
-  const [charts, setCharts] = useState({ H17: { '4to10': { hard: seedHard } } })
+  // Helper function to map dealer value to array index
+  const getDealerIndex = (dealerVal) => {
+    const mapping = {
+      '2': 0, '3': 1, '4': 2, '5': 3, '6': 4,
+      '7': 5, '8': 6, '9': 7, '10': 8, 'A': 9
+    }
+    return mapping[dealerVal] ?? -1
+  }
+
+  // Fetch data on component mount
+  React.useEffect(() => {
+    fetchChartData()
+  }, [])
+
+  // Get current table
+  const table = charts[rule]?.[bucket]?.hard || {}
+
   const setCell = (rowLabel, colIndex, value) => {
     setCharts(prev => {
       const next = JSON.parse(JSON.stringify(prev))
+      if (!next.H17) next.H17 = {}
+      if (!next.H17['4to10']) next.H17['4to10'] = {}
+      if (!next.H17['4to10'].hard) next.H17['4to10'].hard = {}
+      if (!next.H17['4to10'].hard[rowLabel]) {
+        next.H17['4to10'].hard[rowLabel] = new Array(10).fill('H')
+      }
       next.H17['4to10'].hard[rowLabel][colIndex] = value.toUpperCase()
       return next
     })
   }
 
-  const resetCurrentTable = () => setCharts({ H17: { '4to10': { hard: seedHard } } })
+  const resetCurrentTable = () => {
+    fetchChartData() // Refetch from API to reset
+  }
 
   const getActionColor = (action) => {
     switch (action) {
@@ -274,9 +354,11 @@ function StrategyChartPage({ onBack }) {
       case 'RS': return 'bg-orange-100 text-orange-800'
       case 'RH/H': return 'bg-orange-100 text-orange-800'
       case 'RH/P': return 'bg-orange-100 text-orange-800'
+      case 'RH/PRH': return 'bg-orange-100 text-orange-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
+
   const getActionText = (action) => {
     switch (action) {
       case 'DS': return 'D/S'
@@ -284,8 +366,38 @@ function StrategyChartPage({ onBack }) {
       case 'RS': return 'R/S'
       case 'RH/H': return 'R/H'
       case 'RH/P': return 'R/P'
+      case 'RH/PRH': return 'R/H'
       default: return action
     }
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <p className="text-gray-600">Loading strategy chart...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center bg-white p-6 rounded-lg border border-red-200">
+          <p className="text-red-600 mb-4">Error loading chart: {error}</p>
+          <button 
+            onClick={fetchChartData}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -342,7 +454,7 @@ function StrategyChartPage({ onBack }) {
 
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-            <h2 className="font-medium text-gray-900">Hard totals</h2>
+            <h2 className="font-medium text-gray-900">Strategy Chart</h2>
             <p className="text-xs text-gray-500 mt-1">H17, dealer {bucket === '4to10' ? '4 to 10' : '2 to 3'}</p>
           </div>
 
@@ -350,7 +462,7 @@ function StrategyChartPage({ onBack }) {
             <div className="min-w-max">
               <div className="flex bg-gray-100 border-b border-gray-200">
                 <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-600 border-r border-gray-200">
-                  Total
+                  Hand
                 </div>
                 {dealerCards.map((card) => (
                   <div key={card} className="w-12 py-3 text-center text-xs font-medium text-gray-600 border-r border-gray-200 last:border-r-0">
@@ -395,6 +507,7 @@ function StrategyChartPage({ onBack }) {
   )
 }
 
+// Note: Remove the export default line since this is part of App.jsx
 /* --------------------------- Blackjack settings UI -------------------------- */
 
 function BlackjackSettings({ onStart, onBack }) {
