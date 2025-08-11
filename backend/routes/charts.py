@@ -7,13 +7,10 @@ charts_bp = Blueprint('charts', __name__)
 
 @charts_bp.route('/4to10_chart', methods=['GET'])
 def send_4to10_chart():
-    # connect to Postgres
     db, cur = get_db()
 
-    # hard‐coded for test_user1’s 4-10 chart
     chart_id = 100
 
-    # fetch all entries for this chart
     cur.execute("""
         SELECT
             dealer_val,
@@ -36,14 +33,12 @@ def send_4to10_chart():
         recommended_move = row['recommended_move']
 
         if row['player_pair']:
-            # build pair entry
             pair_entries.append({
                 'dealer_val':       dealer_val,
                 'player_pair':      str(row['player_val']), 
                 'recommended_move': recommended_move
             })
         else:
-            # build hard/soft entry
             regular_entries.append({
                 'dealer_val':       dealer_val,
                 'player_val':       row['player_val'],
