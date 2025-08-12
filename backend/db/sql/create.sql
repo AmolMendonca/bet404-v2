@@ -52,3 +52,20 @@ CREATE TABLE IF NOT EXISTS chart_entries (
   player_pair      BOOLEAN NOT NULL,
   recommended_move TEXT    NOT NULL
 );
+
+-- Compact “Perfect” chart table: one row per dealer two-card state with string-encoded rules
+CREATE TABLE IF NOT EXISTS perfect_entries (
+  entry_id             SERIAL PRIMARY KEY,
+  chart_id             INT NOT NULL REFERENCES charts(chart_id) ON DELETE CASCADE,
+  dealer_val           TEXT NOT NULL,
+  hit_until_hard       TEXT NOT NULL,
+  hit_until_soft       TEXT NOT NULL,
+  double_hards         TEXT,
+  double_softs         TEXT,
+  splits               TEXT,
+  late_surrender_hards TEXT,
+  late_surrender_softs TEXT,
+  UNIQUE (chart_id, dealer_val)
+);
+
+CREATE INDEX IF NOT EXISTS idx_perfect_entries_chart ON perfect_entries (chart_id);
