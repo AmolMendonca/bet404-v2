@@ -37,25 +37,40 @@ RANK_TO_VAL = {
 }
 
 def _is_pair(cards):
-    """Exactly two cards in V1: return (is_pair, rank_if_pair_or_None)."""
+    """
+    V1 rule: treat exact same rank as a pair, AND treat any two 10-valued
+    cards (T/J/Q/K) as the TT pair. Returns (is_pair, pair_rank_or_None).
+    For 10-valued pairs, pair_rank is 'T' so _pair_code('T') -> 20.
+    """
     if len(cards) != 2:
         return False, None
+
     r1, r2 = cards[0]['rank'], cards[1]['rank']
-    return (r1 == r2), r1
+    if r1 == r2:
+        return True, r1
+
+    tens = {'T', 'J', 'Q', 'K'}
+    if r1 in tens and r2 in tens:
+        return True, 'T'   # normalize all 10-value pairs to 'T' -> player_val 20
+
+    return False, None
+
 
 def _hand_total_and_soft(cards):
-    """Compute total and whether the 2-card hand is soft (Ace counted as 11)."""
+    """
+    Two-card hands only (V1).
+    total: sum of face values (A=11, T/J/Q/K=10).
+    soft: True iff there's exactly one Ace in the two cards.
+    """
     v1 = RANK_TO_VAL[cards[0]['rank']]
     v2 = RANK_TO_VAL[cards[1]['rank']]
     total = v1 + v2
-    aces = (1 if cards[0]['rank'] == 'A' else 0) + (1 if cards[1]['rank'] == 'A' else 0)
-    # Reduce Aces if bust
-    while total > 21 and aces:
-        total -= 10
-        aces -= 1
-    # Soft if any Ace still effectively 11
-    soft = any(c['rank'] == 'A' for c in cards) and total <= 21 and (total + 10 <= 21 if total <= 11 else False)
+
+    r1, r2 = cards[0]['rank'], cards[1]['rank']
+    soft = ((r1 == 'A') ^ (r2 == 'A'))  # exactly one Ace
+
     return total, soft
+
 
 def _dealer_val_for_4to10(dealer_up):
     """Normalize dealer upcard to '2'..'10' or 'A' for chart lookup."""
@@ -74,41 +89,56 @@ def _pair_code(rank):
         return 20         # TT
     return int(rank) * 11 # 22,33,...,99
 
-def _resolve_cell(reco_cell, soft17_hit, surrender_allowed):
+
+
+
+def _resolve_cell(reco_cell, soft17_hit, surrender_allowed, double_allowed):
     """
     Resolve a chart cell to a concrete single-letter action for V1.
 
-    Rules:
-    - Slash 'X/Y' => pick X if H17 (soft17_hit==True), else Y if S17.
-    - DS or DH => 'D' (frontend already hides D when not allowed in V1).
-    - RH => 'R' if surrender allowed else 'H'
-    - RS => 'R' if surrender allowed else 'S'
-    - Plain 'H'|'S'|'D'|'P'|'R' => return; if 'R' but not allowed => fall back to 'H'
-    - Unknown => default 'H'
+    Inputs:
+      reco_cell (str): e.g. 'H','S','D','P','R','DS','DH','DP','RH','RS','RH/H','15/16', etc.
+      soft17_hit (bool): True = H17 rules, False = S17
+      surrender_allowed (bool): can surrender in this game
+      double_allowed (bool): can double on this first decision (per settings + first two cards)
+
+    Returns: one of 'H','S','D','P','R'
     """
     cell = (reco_cell or '').strip().upper()
 
-    # H17 vs S17 split
-    if '/' in cell and len(cell) <= 8:  # e.g., 'RH/H', '15/16', 'A2-A7/A2-A8'
+    # Handle H17/S17 split like 'RH/H' or '15/16' (we only care about the left/right token)
+    if '/' in cell:
         left, right = cell.split('/', 1)
         cell = left if soft17_hit else right
+        cell = cell.strip().upper()
 
-    # Macros simplified for V1
-    if cell == 'DS' or cell == 'DH':
-        return 'D'
-    if cell == 'RH':
+    # Macros that depend on doubling/surrender availability
+    if cell == 'DS':               # Double if allowed else Stand
+        return 'D' if double_allowed else 'S'
+    if cell == 'DH':               # Double if allowed else Hit
+        return 'D' if double_allowed else 'H'
+    if cell == 'DP':               # Double if allowed else Split (rare, but support it)
+        return 'D' if double_allowed else 'P'
+    if cell == 'RH':               # Surrender if allowed else Hit
         return 'R' if surrender_allowed else 'H'
-    if cell == 'RS':
+    if cell == 'RS':               # Surrender if allowed else Stand
         return 'R' if surrender_allowed else 'S'
+    if cell == 'RP':
+        return 'R' if surrender_allowed else 'P'
 
-    # Plain moves
-    if cell in ('H', 'S', 'D', 'P', 'R'):
+    # Plain directives
+    if cell in ('H', 'S', 'P', 'R', 'D'):
         if cell == 'R' and not surrender_allowed:
+            return 'H'
+        if cell == 'D' and not double_allowed:
+            # Conservative fallback when a plain 'D' is present but doubling disallowed
             return 'H'
         return cell
 
-    # Anything else (ranges, typos, etc.): safe default
+    # Unknown/complex text => safe default
     return 'H'
+
+
 
 def _result_payload(hole_mode, attempted, resolved, correct=None, meta=None):
     return {
@@ -134,7 +164,7 @@ def grade():
 
     # Pull user settings (surrender + H17/S17 matter in V1)
     cur.execute("""
-        SELECT hole_card, surrender_allowed, soft17_hit
+        SELECT hole_card, surrender_allowed, soft17_hit, double_first_two 
         FROM user_settings
         WHERE user_id = %s
     """, (user_id,))
@@ -142,16 +172,26 @@ def grade():
 
     # Mode: DB takes precedence; otherwise payload fallback
     hole_mode = (s['hole_card'] if s else None) or data.get('hole_mode') or '4-10'
+    hole_mode = data.get('hole_mode')
     surrender_allowed = bool(s['surrender_allowed']) if s else True
     soft17_hit        = bool(s['soft17_hit'])        if s else False
+    double_first_two  = (s['double_first_two'] if s else None) or 'any'
 
     player_cards = data.get('player_cards', [])
     dealer_up    = data.get('dealer_up', {})
     attempted    = (data.get('action') or '').upper().strip()
 
     if hole_mode == '4-10':
-        result = _grade_4to10(user_id, player_cards, dealer_up, attempted,
-                              surrender_allowed, soft17_hit, cur)
+        result = _grade_4to10(
+            user_id,
+            player_cards,
+            dealer_up,
+            attempted,
+            surrender_allowed,
+            soft17_hit,
+            double_first_two,
+            cur
+        )
     elif hole_mode == '2-3':
         return jsonify({"todo": "2-3 grading not implemented yet"}), 501
     elif hole_mode == 'perfect':
@@ -167,7 +207,7 @@ def grade():
 # -------------------------
 
 def _grade_4to10(user_id, player_cards, dealer_up, attempted,
-                 surrender_allowed, soft17_hit, cur):
+                 surrender_allowed, soft17_hit, double_first_two, cur):
     """
     V1: first decision only; 2-card hands only; double availability handled on frontend.
     """
@@ -186,6 +226,19 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
     pair, pair_rank = _is_pair(player_cards)
     total, soft = _hand_total_and_soft(player_cards)
     dealer_val = _dealer_val_for_4to10(dealer_up)
+
+    setting = (double_first_two or '').lower()
+    if setting == 'any':
+        double_allowed = True
+    elif setting in ('9-10', '9to10'):
+        double_allowed = total in (9, 10)
+    elif setting in ('10-11', '10to11'):
+        double_allowed = total in (10, 11)
+    elif setting in ('9-11', '9to11'):
+        double_allowed = total in (9, 10, 11)
+    else:
+        # Unknown/empty => safest default is False
+        double_allowed = False
 
     # If frontend accidentally sends trivial 19+ non-pair, stand
     if total >= 19 and not pair:
@@ -225,7 +278,7 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
                                      "soft": soft, "pair": pair})
 
     reco_cell = cell['recommended_move']  # e.g., 'DS', 'RH/H', 'P', 'S'
-    resolved = _resolve_cell(reco_cell, soft17_hit, surrender_allowed)
+    resolved = _resolve_cell(reco_cell, soft17_hit, surrender_allowed, double_allowed)
     is_correct = (attempted == resolved)
 
     return _result_payload(
@@ -237,7 +290,9 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
             "pair": pair,
             "reco_cell_raw": reco_cell,
             "soft17_hit": soft17_hit,
-            "surrender_allowed": surrender_allowed
+            "surrender_allowed": surrender_allowed,
+            "double_first_two": setting,
+            "double_allowed": double_allowed
         }
     )
  
