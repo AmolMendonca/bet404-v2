@@ -170,7 +170,7 @@ const labelForLetter = (l) => {
   }
 }
 
-export default function GameTable({ mode = 'perfect', onBack, userId = 'test_user1' }) {
+export default function GameTable({ mode = 'perfect', onBack, userId = 'test_user1'}) {
   const [gameState, setGameState] = useState('betting')
   const [deck, setDeck] = useState([])
   const [playerHand, setPlayerHand] = useState([])

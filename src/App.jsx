@@ -12,7 +12,7 @@ import {
 function TopNav({ title = 'Bet404', onGo, showBack = false }) {
   const { user, signOut } = useAuth()
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
+    <header className="bg-white border border-gray-200 border-t-0 border-l-0 border-r-0 sticky top-0 z-20">
       <div className="px-4 h-14 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {showBack && (
@@ -131,7 +131,7 @@ function LoginScreen() {
           <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-semibold text-lg">B</span>
           </div>
-          <h1 className="text-2xl font-medium text-gray-900 mb-2">
+        <h1 className="text-2xl font-medium text-gray-900 mb-2">
             {isSignUp ? 'Create account' : 'Bet404'}
           </h1>
           <p className="text-gray-500 text-sm">
@@ -212,8 +212,8 @@ function LoginScreen() {
 /* ------------------------- Strategy chart page (lite) ------------------------- */
 function StrategyChartPage({ onBack }) {
   const [rule, setRule] = React.useState('H17')
-  const [bucket, setBucket] = React.useState('4to10') // '4to10' | '2to3' | 'perfect'
-  const [editable, setEditable] = React.useState(true) // honored only for 2to3
+  const [bucket, setBucket] = React.useState('4to10')
+  const [editable, setEditable] = React.useState(true)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState(null)
   const [showLegend, setShowLegend] = React.useState(false)
@@ -243,7 +243,6 @@ function StrategyChartPage({ onBack }) {
     return m[v] ?? -1
   }
 
-  // 4 to 10 and 2 to 3
   const transformRegularChart = (apiData) => {
     const chart = {}
 
@@ -273,8 +272,6 @@ function StrategyChartPage({ onBack }) {
     return chart
   }
 
-  // Perfect chart, maps your current payload shape:
-  // perfect_entries: [{ dealer_val, harduntil, softstanduntil, doublehards, doublesofts, splits, lshards, lssofts }]
   const transformPerfectChart = (apiData) => {
     const entries = Array.isArray(apiData?.perfect_entries) ? apiData.perfect_entries : []
 
@@ -286,14 +283,10 @@ function StrategyChartPage({ onBack }) {
         'Double Hards':   e.doublehards ?? '',
         'Double Softs':   e.doublesofts ?? '',
         'Splits':         e.splits ?? '',
-        // Combine surrender hints from hards and softs, keep exact text
         'Surrender': [e.lshards, e.lssofts].filter(Boolean).join(' / ')
       }
     }))
 
-    // Order rows: 20 down to 6, then A6 to AA, append anything else after
-    const isNum = (s) => /^\d+$/.test(s)
-    const asNum = (s) => parseInt(s, 10)
     const byLabel = Object.fromEntries(rows.map(r => [r.rowLabel.toUpperCase(), r]))
 
     const hardOrdered = []
@@ -556,16 +549,14 @@ function StrategyChartPage({ onBack }) {
   )
 }
 
-
-// Note: Remove the export default line since this is part of App.jsx
 /* --------------------------- Blackjack settings UI -------------------------- */
 
 function BlackjackSettings({ onStart, onBack }) {
-  const [holeCard, setHoleCard] = useState('perfect') // perfect, 4-10, 2-3, A to 9
-  const [surrenderAllowed, setSurrenderAllowed] = useState('yes') // yes/no
-  const [soft17Hit, setSoft17Hit] = useState('true') // true/false
-  const [decksCount, setDecksCount] = useState('6') // 4/5/6
-  const [doubleAllowed, setDoubleAllowed] = useState('any') // any/9-11,10-11
+  const [holeCard, setHoleCard] = useState('perfect')
+  const [surrenderAllowed, setSurrenderAllowed] = useState('yes')
+  const [soft17Hit, setSoft17Hit] = useState('true')
+  const [decksCount, setDecksCount] = useState('6')
+  const [doubleAllowed, setDoubleAllowed] = useState('any')
 
   const disableDecks = holeCard === 'A to 9'
   const settings = useMemo(() => ({
@@ -573,7 +564,7 @@ function BlackjackSettings({ onStart, onBack }) {
     surrender_allowed: surrenderAllowed === 'yes',
     soft17_hit: soft17Hit === 'true',
     decks_count: Number(decksCount),
-    double_first_two: doubleAllowed === 'any' ? 'any' : doubleAllowed, // keep exact text for backend if needed
+    double_first_two: doubleAllowed === 'any' ? 'any' : doubleAllowed,
   }), [holeCard, surrenderAllowed, soft17Hit, decksCount, doubleAllowed])
 
   return (
@@ -679,6 +670,100 @@ function BlackjackSettings({ onStart, onBack }) {
   )
 }
 
+/* --------------------------- Spanish 21 settings UI -------------------------- */
+
+function Spanish21Settings({ onStart, onBack }) {
+  const [holeCard, setHoleCard] = useState('perfect') // perfect, 4-9, 2-3
+  const [surrenderAllowed, setSurrenderAllowed] = useState('yes') // yes or no
+  const [soft17Hit, setSoft17Hit] = useState('true') // true or false
+  const [doubleAllowed, setDoubleAllowed] = useState('any') // any, 9-11, 10-11
+
+  const settings = useMemo(() => ({
+    game_type: 'spanish21',
+    hole_mode: holeCard === '4-9' ? '4to9' : holeCard === '2-3' ? '2to3' : 'perfect',
+    surrender_allowed: surrenderAllowed === 'yes',
+    soft17_hit: soft17Hit === 'true',
+    double_first_two: doubleAllowed === 'any' ? 'any' : doubleAllowed
+  }), [holeCard, surrenderAllowed, soft17Hit, doubleAllowed])
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="Spanish 21" onGo={onBack} showBack />
+      <main className="px-4 py-4 max-w-md mx-auto">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Hole card</label>
+            <select
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              value={holeCard}
+              onChange={(e)=>setHoleCard(e.target.value)}
+            >
+              <option>Perfect</option>
+              <option>4-9</option>
+              <option>2-3</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">Surrender</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                value={surrenderAllowed}
+                onChange={(e)=>setSurrenderAllowed(e.target.value)}
+              >
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">Dealer soft 17</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                value={soft17Hit}
+                onChange={(e)=>setSoft17Hit(e.target.value)}
+              >
+                <option value="true">Hit</option>
+                <option value="false">Stand</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Double allowed</label>
+            <select
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              value={doubleAllowed}
+              onChange={(e)=>setDoubleAllowed(e.target.value)}
+            >
+              <option value="any">Any</option>
+              <option value="9-11">9-11</option>
+              <option value="10-11">10-11</option>
+            </select>
+          </div>
+
+          <button
+            onClick={() => onStart(settings)}
+            className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800"
+          >
+            Start Spanish 21
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          <button
+            onClick={() => onBack('home')}
+            className="w-full border border-gray-200 py-3 rounded-lg bg-white"
+          >
+            More games
+          </button>
+        </div>
+      </main>
+    </div>
+  )
+}
+
 /* ---------------------------- Simple info pages ---------------------------- */
 
 function StatsPage({ onBack }) {
@@ -762,7 +847,7 @@ function Home({ onGo }) {
               <Gamepad2 size={24} className="text-gray-500" />
               <div className="text-left">
                 <div className="font-medium text-gray-900">Spanish 21</div>
-                <div className="text-xs text-gray-500">Rules coming soon</div>
+                <div className="text-xs text-gray-500">Set rules and start</div>
               </div>
             </div>
           </button>
@@ -788,35 +873,47 @@ function Home({ onGo }) {
 /* ------------------------------ Dashboard shell ----------------------------- */
 
 function Dashboard() {
-  const [route, setRoute] = useState('home') // home, blackjack, spanish21, stats, about, settings, strategy, play
+  const [route, setRoute] = useState('home')
   const [pendingSettings, setPendingSettings] = useState(null)
   const [activeGame, setActiveGame] = useState(null)
+
+  // put this near the top of Dashboard, after your useState hooks
+React.useEffect(() => {
+  const isSpanish21 = route === 'play' && activeGame?.game === 'spanish21'
+  if (isSpanish21) {
+    document.body.style.backgroundColor = '#8B0000'
+    document.documentElement.style.backgroundColor = '#8B0000'
+  } else {
+    document.body.style.backgroundColor = ''
+    document.documentElement.style.backgroundColor = ''
+  }
+  return () => {
+    document.body.style.backgroundColor = ''
+    document.documentElement.style.backgroundColor = ''
+  }
+}, [route, activeGame?.game])
+
 
   const go = (next) => setRoute(next)
 
   const startBlackjack = (settings) => {
     setPendingSettings(settings)
-    setActiveGame({ mode: 'custom', settings })
+    setActiveGame({ mode: 'custom', settings, game: 'blackjack' })
+    setRoute('play')
+  }
+
+  const startSpanish21 = (settings) => {
+    setPendingSettings(settings)
+    setActiveGame({ mode: 'custom', settings, game: 'spanish21' })
     setRoute('play')
   }
 
   if (route === 'strategy') return <StrategyChartPage onBack={go} />
   if (route === 'blackjack') return <BlackjackSettings onStart={startBlackjack} onBack={go} />
+  if (route === 'spanish21') return <Spanish21Settings onStart={startSpanish21} onBack={go} />
   if (route === 'stats') return <StatsPage onBack={go} />
   if (route === 'about') return <AboutPage onBack={go} />
   if (route === 'settings') return <SettingsPage onBack={go} />
-  if (route === 'spanish21') {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <TopNav title="Spanish 21" onGo={go} showBack />
-        <main className="px-4 py-6 max-w-md mx-auto">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 text-sm text-gray-700">
-            Spanish 21 rules and training will be added soon.
-          </div>
-        </main>
-      </div>
-    )
-  }
   if (route === 'more') {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -829,15 +926,36 @@ function Dashboard() {
       </div>
     )
   }
-  if (route === 'play' && activeGame) {
-    return (
-      <GameTable
-        mode={activeGame.mode}
-        settings={pendingSettings}
-        onBack={() => { setActiveGame(null); setRoute('home') }}
-      />
-    )
-  }
+if (route === 'play' && activeGame) {
+  const isSpanish21 = activeGame.game === 'spanish21'
+
+  return (
+    <div className="min-h-screen relative">
+      {/* global overrides only while Spanish 21 is active */}
+      {isSpanish21 && (
+        <style>{`
+          .s21-scope { background-color: #8B0000; min-height: 100vh; width: 100vw; }
+          .s21-scope .bg-gray-50 { background-color: #8B0000 !important; }
+          .s21-scope .bg-white { background-color: rgba(255,255,255,0.06) !important; }
+          .s21-scope .text-gray-900 { color: #fff !important; }
+          .s21-scope .text-gray-700 { color: #f5f5f5 !important; }
+          .s21-scope .border-gray-200 { border-color: rgba(255,255,255,0.15) !important; }
+        `}</style>
+      )}
+
+      <div className={isSpanish21 ? 's21-scope' : 'bg-gray-50'}>
+        {/* no TopNav here */}
+        <GameTable
+          mode={activeGame.mode}
+          settings={pendingSettings}
+          onBack={() => { setActiveGame(null); setRoute('home') }}
+          uiTheme={isSpanish21 ? 'casino-red' : 'default'}
+        />
+      </div>
+    </div>
+  )
+}
+
   return <Home onGo={go} />
 }
 
