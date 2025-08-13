@@ -1,4 +1,3 @@
-Insert the 4-10 chart record for test_user1 with chart_id = 100
 INSERT INTO charts (chart_id, user_id, mode)
 VALUES
   (100, 'test_user1', '4-10');

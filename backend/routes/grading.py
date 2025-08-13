@@ -190,10 +190,21 @@ def grade():
             surrender_allowed,
             soft17_hit,
             double_first_two,
+            hole_mode,
             cur
         )
     elif hole_mode == '2-3':
-        return jsonify({"todo": "2-3 grading not implemented yet"}), 501
+        result = _grade_4to10(
+            user_id,
+            player_cards,
+            dealer_up,
+            attempted,
+            surrender_allowed,
+            soft17_hit,
+            double_first_two,
+            hole_mode,
+            cur
+        )
     elif hole_mode == 'perfect':
         return jsonify({"todo": "perfect grading not implemented yet"}), 501
     else:
@@ -207,20 +218,22 @@ def grade():
 # -------------------------
 
 def _grade_4to10(user_id, player_cards, dealer_up, attempted,
-                 surrender_allowed, soft17_hit, double_first_two, cur):
+                 surrender_allowed, soft17_hit, double_first_two, mode, cur):
     """
     V1: first decision only; 2-card hands only; double availability handled on frontend.
     """
     # Find user's 4-10 chart
+    print(f"The hole mode here is {mode}")
     cur.execute("""
         SELECT chart_id FROM charts
-        WHERE user_id = %s AND mode = '4-10'
+        WHERE user_id = %s AND mode = %s
         LIMIT 1
-    """, (user_id,))
+    """, (user_id, mode))
     row = cur.fetchone()
     if not row:
         return {"error": "4-10 chart not found for user"}, 404
     chart_id = row['chart_id']
+    print(f"Chart that we're pulling from here is {chart_id}")
 
    
 
