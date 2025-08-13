@@ -41,3 +41,6 @@ export function wireAuthExchange() {
 window.getAccessToken = getAccessToken
 window.wireAuthExchange = wireAuthExchange
 
+export const API_BASE = import.meta.env.PROD
+  ? import.meta.env.VITE_API_BASE || ''
+  : ''

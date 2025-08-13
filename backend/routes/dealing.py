@@ -26,6 +26,8 @@ def deal_newhand():
 
     # real user from Supabase token
     user_id = g.user['id']
+    
+    print(f"user id is {user_id}")
 
     # pull settings for this user
     cur.execute("""
@@ -34,6 +36,7 @@ def deal_newhand():
         WHERE user_id = %s
     """, (user_id,))
     s = cur.fetchone()
+    print(f"user fetched is nine other than {s}")
 
     # defaults if not found
     hole_mode         = (s['hole_card'] if s else '4-10')
