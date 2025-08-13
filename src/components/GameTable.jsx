@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { 
   Heart, Diamond, Club, Spade, 
   Eye, TrendingUp, AlertCircle, 
   RotateCcw, PlayCircle, XCircle, CheckCircle,
-  Zap, Split, DollarSign, Settings
+  Zap, Split, DollarSign, Settings, SkipForward
 } from 'lucide-react'
 
 console.log('GameTable loaded');
@@ -27,7 +27,7 @@ if (!window.__fetchLoggerInstalled) {
   window.__fetchLoggerInstalled = true;
 }
 
-const gradeEndpoint = '/api/grade_decision';
+const gradeEndpoint = '/api/grade';
 
 const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) => {
   const getSuitIcon = () => {
@@ -159,7 +159,18 @@ const StatsPanel = ({ stats, mode }) => {
 
 const HoleCardDisplay = ({ card, mode, revealed }) => null
 
-export default function GameTable({ mode = 'perfect', onBack }) {
+const labelForLetter = (l) => {
+  switch (l) {
+    case 'H': return 'Hit'
+    case 'S': return 'Stand'
+    case 'D': return 'Double'
+    case 'P': return 'Split'
+    case 'R': return 'Surrender'
+    default: return l || ''
+  }
+}
+
+export default function GameTable({ mode = 'perfect', onBack, userId = 'test_user1' }) {
   const [gameState, setGameState] = useState('betting')
   const [deck, setDeck] = useState([])
   const [playerHand, setPlayerHand] = useState([])
@@ -170,19 +181,44 @@ export default function GameTable({ mode = 'perfect', onBack }) {
   const [dealerValue, setDealerValue] = useState(0)
   const [message, setMessage] = useState('Place your bet to start')
   const [stats, setStats] = useState({ handsPlayed: 0, correctMoves: 0, accuracy: 0, streak: 0 })
-  const [showFeedback, setShowFeedback] = useState(false)
   const [isCorrect, setIsCorrect] = useState(null)
+  const [lastGrade, setLastGrade] = useState(null)
 
-  // training states
+  // countdown
+  const [countdown, setCountdown] = useState(0)
+  const [countdownActive, setCountdownActive] = useState(false)
+  const [progressPct, setProgressPct] = useState(0)
+  const timerRef = useRef(null)
+
+  // training
   const [initialDeal, setInitialDeal] = useState(null)
   const [handId, setHandId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  // normalize to keep ranks consistent and make tens a single letter if needed
+  // helpers
   const normalizeRank = (v) => {
     if (!v) return v
     const s = String(v).toUpperCase()
     return s === '10' ? 'T' : s
+  }
+
+  // send ranks that the grader accepts
+  const rankForBackend = (v) => {
+    if (v === '10') return 'T'
+    return v
+  }
+
+  const canonicalHoleMode = (m) => {
+    const s = String(m || '').trim()
+    if (/4\s*[-_ ]?\s*10/i.test(s)) return '4-10'
+    if (/2\s*[-_ ]?\s*3/i.test(s)) return '2-3'
+    return s
+  }
+
+  const supportedHoleModes = ['4-10', '2-3']
+  const resolveHoleMode = (m) => {
+    const s = canonicalHoleMode(m)
+    return supportedHoleModes.includes(s) ? s : '4-10'
   }
 
   const isTenValue = (v) => ['T','J','Q','K'].includes(v)
@@ -201,14 +237,49 @@ export default function GameTable({ mode = 'perfect', onBack }) {
     return value
   }
 
-  // map frontend action to backend action names if required
-  const toBackendAction = (a) => (
-    a === 'double' ? 'double_down' :
-    a === 'split'  ? 'split_pairs' :
+  const toBackendLetter = (a) => (
+    a === 'double' ? 'D' :
+    a === 'split'  ? 'P' :
+    a === 'hit'    ? 'H' :
+    a === 'stand'  ? 'S' :
+    a === 'surrender' ? 'R' :
     a
   )
 
-  // Fetch a brand new hand
+  // countdown control
+  const startNextHandCountdown = (secs = 5) => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+    setCountdown(secs)
+    setProgressPct(0)
+    setCountdownActive(true)
+    const start = Date.now()
+    const total = secs * 1000
+
+    timerRef.current = setInterval(() => {
+      const elapsed = Date.now() - start
+      const remainingMs = Math.max(0, total - elapsed)
+      const remaining = Math.ceil(remainingMs / 1000)
+      setCountdown(remaining)
+      setProgressPct(Math.min(100, Math.round((elapsed / total) * 100)))
+      if (remainingMs <= 0) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+        setCountdownActive(false)
+        fetchNewHand()
+      }
+    }, 100)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [])
+
+  // fetch hand
   const fetchNewHand = async () => {
     console.log('fetchNewHand start');
     try {
@@ -243,7 +314,11 @@ export default function GameTable({ mode = 'perfect', onBack }) {
       setShowHoleCard(false);
       setGameState('playing');
       setMessage('Make your move');
-
+      setLastGrade(null)
+      setIsCorrect(null)
+      setCountdown(0)
+      setCountdownActive(false)
+      setProgressPct(0)
     } catch (e) {
       console.log('fetchNewHand error:', e);
       setMessage(`Dealing service error, using local shoe. ${e.message || e}`);
@@ -255,23 +330,31 @@ export default function GameTable({ mode = 'perfect', onBack }) {
     fetchNewHand();
   }
 
-  // Training flow: send action to backend, show grade, then new hand
+  // grade and start countdown
   const sendDecisionForGrading = async (action) => {
     if (!initialDeal) return;
-    if (submitting) return;
+    if (submitting || countdownActive) return;
     setSubmitting(true);
     try {
+      const resolvedMode = resolveHoleMode(mode)
       const payload = {
-        hand_id: handId,
-        action: toBackendAction(action),
-        initial_cards: {
-          player_cards: initialDeal.player_cards,
-          dealer_upcard: initialDeal.dealer_upcard,
-          dealer_hole_card: initialDeal.dealer_hole_card
-        },
-        settings: initialDeal.settings,
-        mode
+        user_id: userId,
+        hole_mode: resolvedMode,
+        player_cards: (initialDeal.player_cards || []).map(c => ({
+          rank: rankForBackend(c.value),
+          suit: c.suit
+        })),
+        dealer_up: initialDeal.dealer_upcard ? {
+          rank: rankForBackend(initialDeal.dealer_upcard.value),
+          suit: initialDeal.dealer_upcard.suit
+        } : null,
+        action: toBackendLetter(action)
       };
+
+      console.log('[grade] using hole_mode', { incomingMode: mode, resolvedMode });
+      console.log('[grade] player ranks', (initialDeal.player_cards || []).map(c => c.value))
+      console.log('[grade] dealer up rank', initialDeal.dealer_upcard?.value)
+      console.log('[grade] payload', payload);
 
       const res = await fetch(gradeEndpoint, {
         method: 'POST',
@@ -279,13 +362,22 @@ export default function GameTable({ mode = 'perfect', onBack }) {
         body: JSON.stringify(payload)
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const result = await res.json();
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.error('[grade] HTTP error', res.status, errText);
+        throw new Error(`HTTP ${res.status} ${errText || ''}`.trim());
+      }
 
-      const correct = Boolean(result.correct);
+      const result = await res.json();
+      console.log('[grade] result', result);
+
+      const correct = Boolean(result.is_correct);
       setIsCorrect(correct);
-      setShowFeedback(true);
-      setTimeout(() => setShowFeedback(false), 1200);
+      setLastGrade({
+        attempted: result.attempted,
+        correct_move: result.correct_move,
+        mode: result.mode
+      });
 
       setStats(prev => {
         const hands = prev.handsPlayed + 1;
@@ -298,33 +390,40 @@ export default function GameTable({ mode = 'perfect', onBack }) {
         };
       });
 
+      startNextHandCountdown(5)
+
     } catch (e) {
       console.error('grading error', e);
-      setMessage('Could not grade that action. Try again');
+      setMessage('Could not grade that action. Check console for details');
     } finally {
       setSubmitting(false);
-      await fetchNewHand();
     }
   };
 
-  // Buttons always enabled during play, only blocked while submitting
+  // buttons
   const onHit = () => sendDecisionForGrading('hit');
   const onStand = () => sendDecisionForGrading('stand');
   const onDouble = () => sendDecisionForGrading('double');
   const onSplit = () => sendDecisionForGrading('split');
   const onSurrender = () => sendDecisionForGrading('surrender');
 
-  // Values for UI only
+  // derived values
   useEffect(() => {
     setPlayerValue(calculateHandValue(playerHand))
     setDealerValue(calculateHandValue(showHoleCard ? [...dealerHand, dealerHoleCard].filter(Boolean) : dealerHand))
   }, [playerHand, dealerHand, dealerHoleCard, showHoleCard])
 
-  // Optional relaxed split logic if you want to display a tip or icon somewhere
   const canShowSplitTip = playerHand[0] && playerHand[1] && (
     playerHand[0].value === playerHand[1].value ||
     (isTenValue(playerHand[0].value) && isTenValue(playerHand[1].value))
   );
+
+  const resolved = resolveHoleMode(mode)
+  const unsupportedMode = !supportedHoleModes.includes(String(canonicalHoleMode(mode)));
+
+  const decisionColor = isCorrect === null ? 'border-white/20' : isCorrect ? 'border-green-500' : 'border-red-500'
+  const decisionBg = isCorrect === null ? 'bg-white/5' : isCorrect ? 'bg-green-500/15' : 'bg-red-500/15'
+  const decisionText = isCorrect === null ? 'text-white' : isCorrect ? 'text-green-300' : 'text-red-300'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-900 to-black">
@@ -341,7 +440,7 @@ export default function GameTable({ mode = 'perfect', onBack }) {
           <div className="flex items-center space-x-6">
             <div className="text-white">
               <span className="text-sm text-white/60">Mode: </span>
-              <span className="font-semibold capitalize">{mode.replace(/([A-Z])/g, ' $1')}</span>
+              <span className="font-semibold capitalize">{String(mode).replace(/([A-Z])/g, ' $1')}</span>
             </div>
             <button className="text-white/60 hover:text-white transition-colors">
               <Settings className="w-5 h-5" />
@@ -351,6 +450,12 @@ export default function GameTable({ mode = 'perfect', onBack }) {
       </header>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 py-8">
+        {unsupportedMode && (
+          <div className="mb-4 rounded-lg border border-yellow-400/40 bg-yellow-500/10 text-yellow-300 px-4 py-3">
+            Mode not supported, grading will use {resolved}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
             <div className="mb-8">
@@ -367,26 +472,68 @@ export default function GameTable({ mode = 'perfect', onBack }) {
               </div>
             </div>
 
-            <div className="text-center mb-8">
+            <div className="text-center mb-6">
               <div className="inline-flex items-center px-6 py-3 bg-black/30 backdrop-blur-md rounded-full border border-white/20">
                 <span className="text-white font-semibold text-lg">{message}</span>
               </div>
-              {showFeedback && (
-                <div className={`mt-4 inline-flex items-center px-4 py-2 rounded-full ${isCorrect ? 'bg-green-500/30 border border-green-500' : 'bg-red-500/30 border border-red-500'}`}>
-                  {isCorrect ? (
-                    <>
-                      <CheckCircle className="w-5 h-5 text-green-400 mr-2" />
-                      <span className="text-green-400 font-semibold">Correct</span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="w-5 h-5 text-red-400 mr-2" />
-                      <span className="text-red-400 font-semibold">Incorrect</span>
-                    </>
-                  )}
-                </div>
-              )}
             </div>
+
+            {lastGrade && (
+              <div className={`mb-8 mx-auto max-w-xl rounded-xl border ${decisionColor} ${decisionBg} p-4`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    {isCorrect ? (
+                      <CheckCircle className="w-6 h-6 text-green-400 mr-2" />
+                    ) : (
+                      <XCircle className="w-6 h-6 text-red-400 mr-2" />
+                    )}
+                    <div className={`font-semibold ${decisionText}`}>
+                      {isCorrect ? 'Correct' : 'Incorrect'}
+                    </div>
+                  </div>
+                  <div className="text-xs text-white/60">
+                    Mode {lastGrade.mode}
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                    <div className="text-white/60 text-xs">Your move</div>
+                    <div className="text-white font-semibold">{labelForLetter(lastGrade.attempted)} ({lastGrade.attempted})</div>
+                  </div>
+                  <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                    <div className="text-white/60 text-xs">Correct move</div>
+                    <div className="text-white font-semibold">{labelForLetter(lastGrade.correct_move)} ({lastGrade.correct_move})</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="text-sm text-white/80">
+                    {countdownActive ? `Next hand in ${countdown}s` : 'Ready'}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => {
+                        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
+                        setCountdownActive(false)
+                        fetchNewHand()
+                      }}
+                      className="px-3 py-1 rounded-md text-sm bg-white/10 hover:bg-white/20 text-white border border-white/20 flex items-center"
+                    >
+                      <SkipForward className="w-4 h-4 mr-1" />
+                      Skip
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-2 h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-100"
+                    style={{ width: `${countdownActive ? progressPct : 0}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="mb-8">
               <div className="flex justify-center space-x-3 mb-4">
@@ -413,11 +560,11 @@ export default function GameTable({ mode = 'perfect', onBack }) {
               )}
               {gameState === 'playing' && (
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                  <ActionButton onClick={onHit} disabled={submitting} variant="primary">Hit</ActionButton>
-                  <ActionButton onClick={onStand} disabled={submitting} variant="secondary">Stand</ActionButton>
-                  <ActionButton onClick={onDouble} disabled={submitting} variant="warning" icon={DollarSign}>Double</ActionButton>
-                  <ActionButton onClick={onSplit} disabled={submitting} variant="warning" icon={Split}>Split</ActionButton>
-                  <ActionButton onClick={onSurrender} disabled={submitting} variant="danger">Surrender</ActionButton>
+                  <ActionButton onClick={onHit} disabled={submitting || countdownActive} variant="primary">Hit</ActionButton>
+                  <ActionButton onClick={onStand} disabled={submitting || countdownActive} variant="secondary">Stand</ActionButton>
+                  <ActionButton onClick={onDouble} disabled={submitting || countdownActive} variant="warning" icon={DollarSign}>Double</ActionButton>
+                  <ActionButton onClick={onSplit} disabled={submitting || countdownActive} variant="warning" icon={Split}>Split</ActionButton>
+                  <ActionButton onClick={onSurrender} disabled={submitting || countdownActive} variant="danger">Surrender</ActionButton>
                 </div>
               )}
               {gameState === 'finished' && (

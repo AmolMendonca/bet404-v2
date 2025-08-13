@@ -3,14 +3,14 @@
 V1 grading: First-decision only, 2-card hands only, doubles already gated by frontend.
 We grade 4-10 mode now; 2-3 and perfect return 501 TODO stubs.
 
-Request JSON (example):
-{
-  "user_id": "test_user1",                # TODO: later from session/JWT
-  "hole_mode": "4-10",                    # optional; settings override if present in DB
-  "player_cards": [{"rank":"A","suit":"hearts"},{"rank":"6","suit":"clubs"}],
-  "dealer_up": {"rank":"6","suit":"spades"},
-  "action": "D"                           # 'H'|'S'|'D'|'P'|'RS' (frontend constrains availability)
-}
+    Request JSON (example):
+    {
+    "user_id": "test_user1",                # TODO: later from session/JWT
+    "hole_mode": "4-10",                    # optional; settings override if present in DB
+    "player_cards": [{"rank":"A","suit":"hearts"},{"rank":"6","suit":"clubs"}],
+    "dealer_up": {"rank":"6","suit":"spades"},
+    "action": "D"                           # 'H'|'S'|'D'|'P'|'RS' (frontend constrains availability)
+    }
 
 Response JSON:
 {
