@@ -6,6 +6,10 @@ import {
   Eye, EyeOff, LogOut, Settings as SettingsIcon, BarChart3, Gamepad2, Info,
   BookOpen, ChevronDown, ChevronUp, ArrowLeft, Edit3, RefreshCw
 } from 'lucide-react'
+import { getAccessToken } from './lib/supabase.js'
+
+import { supabase } from './lib/supabase.js'
+
 
 /* ----------------------------- Shared UI bits ----------------------------- */
 
@@ -40,14 +44,23 @@ function TopNav({ title = 'Bet404', onGo, showBack = false }) {
             <SettingsIcon size={18} />
           </button>
           <div className="hidden sm:block text-xs text-gray-600">{user?.email}</div>
-          <button
-            onClick={() => signOut()}
-            className="flex items-center space-x-1 text-gray-600"
-            title="Sign out"
-          >
-            <LogOut size={16} />
-            <span className="text-sm">Sign out</span>
-          </button>
+<button
+  onClick={async () => {
+    // clear server cookie
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    } catch (e) {
+      console.warn('logout endpoint failed', e)
+    }
+    // clear Supabase session in the browser
+    await supabase.auth.signOut()
+  }}
+  className="flex items-center space-x-1 text-gray-600"
+  title="Sign out"
+>
+  <LogOut size={16} />
+  <span className="text-sm">Sign out</span>
+</button>
         </div>
       </div>
     </header>
@@ -227,6 +240,15 @@ function StrategyChartPage({ onBack }) {
 
   const [perfectChart, setPerfectChart] = React.useState({ rule: 'H17', rows: [] })
 
+  // authenticated fetch helper, attaches Supabase token and sends cookies
+  const authFetch = async (path, init = {}) => {
+    const token = await getAccessToken()
+    const headers = new Headers(init.headers || {})
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    return fetch(path, { ...init, headers, credentials: 'include' })
+  }
+
   const getActionColor = (raw) => {
     const a = String(raw || '').toUpperCase()
     const head = a[0] || ''
@@ -309,7 +331,7 @@ function StrategyChartPage({ onBack }) {
       setLoading(true); setError(null)
 
       if (bucket === 'perfect') {
-        const res = await fetch(`/api/perfect_chart?rule=${encodeURIComponent(rule)}`)
+        const res = await authFetch(`/api/perfect_chart?rule=${encodeURIComponent(rule)}`)
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
         const data = await res.json()
         console.log('[perfect_chart] raw', data)
@@ -317,14 +339,14 @@ function StrategyChartPage({ onBack }) {
         console.log('[perfect_chart] rows', rows)
         setPerfectChart({ rule, rows })
       } else if (bucket === '2to3') {
-        const res = await fetch('/api/2to3_chart')
+        const res = await authFetch('/api/2to3_chart')
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
         const data = await res.json()
         console.log('[2to3_chart] raw', data)
         const transformed = transformRegularChart(data)
         setCharts(prev => ({ ...prev, [rule]: { ...(prev[rule] || {}), ['2to3']: { hard: transformed } } }))
       } else {
-        const res = await fetch('/api/4to10_chart')
+        const res = await authFetch('/api/4to10_chart')
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
         const data = await res.json()
         console.log('[4to10_chart] raw', data)
@@ -877,15 +899,14 @@ function Dashboard() {
   const [pendingSettings, setPendingSettings] = useState(null)
   const [activeGame, setActiveGame] = useState(null)
 
-  // put this near the top of Dashboard, after your useState hooks
 React.useEffect(() => {
   const isSpanish21 = route === 'play' && activeGame?.game === 'spanish21';
 
   if (isSpanish21) {
-    document.body.style.backgroundColor = '#8B0000';   // red
+    document.body.style.backgroundColor = '#8B0000';
     document.documentElement.style.backgroundColor = '#8B0000';
   } else {
-    document.body.style.backgroundColor = '#006400';   // green for blackjack
+    document.body.style.backgroundColor = '#006400';
     document.documentElement.style.backgroundColor = '#006400';
   }
   return () => {
@@ -893,7 +914,6 @@ React.useEffect(() => {
     document.documentElement.style.backgroundColor = '';
   };
 }, [route, activeGame?.game]);
-
 
   const go = (next) => setRoute(next)
 
@@ -927,33 +947,33 @@ React.useEffect(() => {
       </div>
     )
   }
-if (route === 'play' && activeGame) {
-const isSpanish21 = activeGame.game === 'spanish21';
+  if (route === 'play' && activeGame) {
+    const isSpanish21 = activeGame.game === 'spanish21';
 
-return (
-  <div className="min-h-screen relative">
-    {isSpanish21 && (
-      <style>{`
-        .s21-scope { background-color: #8B0000; min-height: 100vh; width: 100vw; }
-        .s21-scope .bg-gray-50 { background-color: #8B0000 !important; }
-        .s21-scope .bg-white { background-color: rgba(255,255,255,0.06) !important; }
-        .s21-scope .text-gray-900 { color: #fff !important; }
-        .s21-scope .text-gray-700 { color: #f5f5f5 !important; }
-        .s21-scope .border-gray-200 { border-color: rgba(255,255,255,0.15) !important; }
-      `}</style>
-    )}
+    return (
+      <div className="min-h-screen relative">
+        {isSpanish21 && (
+          <style>{`
+            .s21-scope { background-color: #8B0000; min-height: 100vh; width: 100vw; }
+            .s21-scope .bg-gray-50 { background-color: #8B0000 !important; }
+            .s21-scope .bg-white { background-color: rgba(255,255,255,0.06) !important; }
+            .s21-scope .text-gray-900 { color: #fff !important; }
+            .s21-scope .text-gray-700 { color: #f5f5f5 !important; }
+            .s21-scope .border-gray-200 { border-color: rgba(255,255,255,0.15) !important; }
+          `}</style>
+        )}
 
-    <div className={isSpanish21 ? 's21-scope' : 'bg-green-700'}>
-      <GameTable
-        mode={activeGame.mode}
-        settings={pendingSettings}
-        onBack={() => { setActiveGame(null); setRoute('home'); }}
-        uiTheme={isSpanish21 ? 'casino-red' : 'default'}
-      />
-    </div>
-  </div>
-);
-}
+        <div className={isSpanish21 ? 's21-scope' : 'bg-green-700'}>
+          <GameTable
+            mode={activeGame.mode}
+            settings={pendingSettings}
+            onBack={() => { setActiveGame(null); setRoute('home'); }}
+            uiTheme={isSpanish21 ? 'casino-red' : 'default'}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return <Home onGo={go} />
 }

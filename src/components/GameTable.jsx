@@ -5,6 +5,7 @@ import {
   RotateCcw, PlayCircle, XCircle, CheckCircle,
   Zap, Split, DollarSign, Settings, SkipForward
 } from 'lucide-react'
+import { getAccessToken } from '../lib/supabase'
 
 console.log('GameTable loaded');
 
@@ -28,6 +29,15 @@ if (!window.__fetchLoggerInstalled) {
 }
 
 const gradeEndpoint = '/api/grade';
+
+// authenticated fetch helper, adds Supabase token and sends cookies
+const authFetch = async (path, init = {}) => {
+  const token = await getAccessToken()
+  const headers = new Headers(init.headers || {})
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  if (!headers.has('Content-Type') && init.body) headers.set('Content-Type', 'application/json')
+  return fetch(path, { ...init, headers, credentials: 'include' })
+}
 
 const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) => {
   const getSuitIcon = () => {
@@ -170,7 +180,7 @@ const labelForLetter = (l) => {
   }
 }
 
-export default function GameTable({ mode = 'perfect', onBack, userId = 'test_user1'}) {
+export default function GameTable({ mode = 'perfect', onBack }) {
   const [gameState, setGameState] = useState('betting')
   const [deck, setDeck] = useState([])
   const [playerHand, setPlayerHand] = useState([])
@@ -292,7 +302,7 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
   const fetchNewHand = async () => {
     console.log('fetchNewHand start');
     try {
-      const res = await fetch('/api/deal_newhand', { method: 'GET' });
+      const res = await authFetch('/api/deal_newhand', { method: 'GET' });
       console.log('deal_newhand status:', res.status);
 
       if (!res.ok) {
@@ -346,7 +356,6 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
     try {
       const resolvedMode = resolveHoleMode(mode)
       const payload = {
-        user_id: userId,
         hole_mode: resolvedMode,
         player_cards: (initialDeal.player_cards || []).map(c => ({
           rank: rankForBackend(c.value),
@@ -364,9 +373,8 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
       console.log('[grade] dealer up rank', initialDeal.dealer_upcard?.value)
       console.log('[grade] payload', payload);
 
-      const res = await fetch(gradeEndpoint, {
+      const res = await authFetch(gradeEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 

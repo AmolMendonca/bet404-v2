@@ -1,10 +1,15 @@
-from flask import jsonify, Blueprint
-import os
-
+from flask import Blueprint, jsonify, g
 import random
-from flask import Blueprint, jsonify
-from utils import _is_pair, _hand_total_and_soft, _is_blackjack, _to_frontend_rank, _make_shoe
+
+from utils import (
+    _is_pair,
+    _hand_total_and_soft,
+    _is_blackjack,
+    _to_frontend_rank,
+    _make_shoe,
+)
 from models import get_db
+from auth import require_user
 
 dealing_bp = Blueprint('dealing', __name__)
 
@@ -14,14 +19,15 @@ RANK_TO_VAL = {
 }
 TEN_SET = {'T', 'J', 'Q', 'K'}
 
-@dealing_bp.route('/deal_newhand', methods=['GET'])
+@dealing_bp.get('/deal_newhand')
+@require_user                      # protect this route
 def deal_newhand():
     db, cur = get_db()
 
-    # TEMP user until auth wired up
-    user_id = 'test_user1'
+    # real user from Supabase token
+    user_id = g.user['id']
 
-    # pull settings
+    # pull settings for this user
     cur.execute("""
         SELECT hole_card, surrender_allowed, soft17_hit, decks_count, double_first_two
         FROM user_settings
@@ -36,17 +42,17 @@ def deal_newhand():
     decks_count       = int(s['decks_count'])        if s else 6
     double_first_two  = (s['double_first_two'] if s else 'any')
 
-    # force 1 deck for the A-9 modes
+    # force one deck for the A to 9 modes
     if hole_mode in ('A-9DAS', 'A-9NoDAS'):
         decks_count = 1
 
-    # deal until non-trivial hand
+    # deal until non trivial hand
     tries = 0
     MAX_TRIES = 400
     while True:
         tries += 1
         if tries > MAX_TRIES:
-            return jsonify({"error": "could not produce a non-trivial hand"}), 500
+            return jsonify({"error": "could not produce a non trivial hand"}), 500
 
         shoe = _make_shoe(decks_count)
 
@@ -54,7 +60,6 @@ def deal_newhand():
         dealer_up    = shoe.pop()
         dealer_hole  = shoe.pop()
 
-        # compute trivials
         player_total, player_soft = _hand_total_and_soft(player_cards)
         player_pair = _is_pair(player_cards)
 
@@ -70,7 +75,6 @@ def deal_newhand():
 
         if not trivial:
             break
-        # else loop again with a fresh shuffle
 
     # build dealer cards payload by mode
     if hole_mode == 'perfect':
@@ -99,13 +103,12 @@ def deal_newhand():
             {'hole_bucket': 'A-9NoDAS'}
         ]
     else:
-        # fallback
         dealer_cards = [
             {'suit': dealer_up['suit'], 'rank': _to_frontend_rank(dealer_up['rank'])},
             {'hole_bucket': None}
         ]
 
-    # normalize player ranks for frontend too
+    # normalize player ranks for frontend
     player_cards_out = [
         {'suit': player_cards[0]['suit'], 'rank': _to_frontend_rank(player_cards[0]['rank'])},
         {'suit': player_cards[1]['suit'], 'rank': _to_frontend_rank(player_cards[1]['rank'])},
