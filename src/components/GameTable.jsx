@@ -184,25 +184,21 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
   const [isCorrect, setIsCorrect] = useState(null)
   const [lastGrade, setLastGrade] = useState(null)
 
-  // countdown
   const [countdown, setCountdown] = useState(0)
   const [countdownActive, setCountdownActive] = useState(false)
   const [progressPct, setProgressPct] = useState(0)
   const timerRef = useRef(null)
 
-  // training
   const [initialDeal, setInitialDeal] = useState(null)
   const [handId, setHandId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  // helpers
   const normalizeRank = (v) => {
     if (!v) return v
     const s = String(v).toUpperCase()
     return s === '10' ? 'T' : s
   }
 
-  // send ranks that the grader accepts
   const rankForBackend = (v) => {
     if (v === '10') return 'T'
     return v
@@ -237,6 +233,21 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
     return value
   }
 
+  // helper for soft or hard total
+  const getHandInfo = (hand) => {
+    let total = 0
+    let aces = 0
+    for (const c of hand) {
+      if (c.value === 'A') { aces++; total += 11 }
+      else if (['T','J','Q','K'].includes(c.value)) total += 10
+      else total += parseInt(c.value, 10)
+    }
+    let softAces = aces
+    while (total > 21 && softAces > 0) { total -= 10; softAces-- }
+    const soft = softAces > 0
+    return { total, soft }
+  }
+
   const toBackendLetter = (a) => (
     a === 'double' ? 'D' :
     a === 'split'  ? 'P' :
@@ -246,7 +257,6 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
     a
   )
 
-  // countdown control
   const startNextHandCountdown = (secs = 5) => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -279,7 +289,6 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
     }
   }, [])
 
-  // fetch hand
   const fetchNewHand = async () => {
     console.log('fetchNewHand start');
     try {
@@ -330,7 +339,6 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
     fetchNewHand();
   }
 
-  // grade and start countdown
   const sendDecisionForGrading = async (action) => {
     if (!initialDeal) return;
     if (submitting || countdownActive) return;
@@ -400,14 +408,12 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
     }
   };
 
-  // buttons
   const onHit = () => sendDecisionForGrading('hit');
   const onStand = () => sendDecisionForGrading('stand');
   const onDouble = () => sendDecisionForGrading('double');
   const onSplit = () => sendDecisionForGrading('split');
   const onSurrender = () => sendDecisionForGrading('surrender');
 
-  // derived values
   useEffect(() => {
     setPlayerValue(calculateHandValue(playerHand))
     setDealerValue(calculateHandValue(showHoleCard ? [...dealerHand, dealerHoleCard].filter(Boolean) : dealerHand))
@@ -424,6 +430,10 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
   const decisionColor = isCorrect === null ? 'border-white/20' : isCorrect ? 'border-green-500' : 'border-red-500'
   const decisionBg = isCorrect === null ? 'bg-white/5' : isCorrect ? 'bg-green-500/15' : 'bg-red-500/15'
   const decisionText = isCorrect === null ? 'text-white' : isCorrect ? 'text-green-300' : 'text-red-300'
+
+  // derive if double is allowed
+  const { total: pTotal, soft: pSoft } = getHandInfo(playerHand)
+  const canDoubleHard1011 = playerHand.length === 2 && !pSoft && (pTotal === 10 || pTotal === 11)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-900 to-black">
@@ -562,7 +572,14 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   <ActionButton onClick={onHit} disabled={submitting || countdownActive} variant="primary">Hit</ActionButton>
                   <ActionButton onClick={onStand} disabled={submitting || countdownActive} variant="secondary">Stand</ActionButton>
-                  <ActionButton onClick={onDouble} disabled={submitting || countdownActive} variant="warning" icon={DollarSign}>Double</ActionButton>
+                  <ActionButton
+                    onClick={onDouble}
+                    disabled={submitting || countdownActive || !canDoubleHard1011}
+                    variant="warning"
+                    icon={DollarSign}
+                  >
+                    Double
+                  </ActionButton>
                   <ActionButton onClick={onSplit} disabled={submitting || countdownActive} variant="warning" icon={Split}>Split</ActionButton>
                   <ActionButton onClick={onSurrender} disabled={submitting || countdownActive} variant="danger">Surrender</ActionButton>
                 </div>
@@ -573,6 +590,12 @@ export default function GameTable({ mode = 'perfect', onBack, userId = 'test_use
                 </ActionButton>
               )}
             </div>
+
+            {gameState === 'playing' && !canDoubleHard1011 && playerHand.length >= 2 && (
+              <div className="mt-3 text-center text-xs text-white/60">
+                Double is available only on a hard 10 or 11 on the first two cards
+              </div>
+            )}
           </div>
 
           <div className="lg:col-span-1">
