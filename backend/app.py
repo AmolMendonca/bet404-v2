@@ -6,6 +6,7 @@ from routes.hello import hello_bp
 from routes.dealing import dealing_bp
 from routes.charts import charts_bp
 from routes.grading import grading_bp
+from routes.settings import settings_bp
 
 def create_app():
     app = Flask(__name__)
@@ -17,6 +18,8 @@ def create_app():
     app.register_blueprint(dealing_bp, url_prefix='/api')
     app.register_blueprint(charts_bp, url_prefix='/api')
     app.register_blueprint(grading_bp, url_prefix='/api')
+    app.register_blueprint(settings_bp, url_prefix='/api')
+
 
     return app
     
