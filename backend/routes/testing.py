@@ -51,3 +51,4 @@ double_allowed = False
 
 result = _resolve_cell(reco_cell, soft17_hit, surrender_allowed, double_allowed)
 print(f"resolve({reco_cell=}, {soft17_hit=}, {surrender_allowed=}, {double_allowed=}) => {result}")
+

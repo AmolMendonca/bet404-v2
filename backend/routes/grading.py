@@ -222,6 +222,8 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
         return {"error": "4-10 chart not found for user"}, 404
     chart_id = row['chart_id']
 
+   
+
     # Derive hand state
     pair, pair_rank = _is_pair(player_cards)
     total, soft = _hand_total_and_soft(player_cards)
@@ -243,12 +245,15 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
     # If frontend accidentally sends trivial 19+ non-pair, stand
     if total >= 19 and not pair:
         resolved = 'S'
+        
         return _result_payload('4-10', attempted, resolved,
                                meta={"reason": "auto-stand on 19+ (non-pair)",
                                      "dealer_val": dealer_val,
                                      "total": total, "soft": soft})
 
     # Pull cell from chart
+
+    
     if pair:
         player_val = _pair_code(pair_rank)
         cur.execute("""
@@ -260,6 +265,7 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
         """, (chart_id, dealer_val, player_val))
     else:
         player_hand_type = 'soft' if soft else 'hard'
+        
         cur.execute("""
             SELECT recommended_move
             FROM chart_entries
@@ -269,6 +275,7 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
         """, (chart_id, dealer_val, total, player_hand_type))
 
     cell = cur.fetchone()
+    
     if not cell:
         # Safe fallback
         fallback = 'H' if total < 17 else 'S'
