@@ -879,19 +879,20 @@ function Dashboard() {
 
   // put this near the top of Dashboard, after your useState hooks
 React.useEffect(() => {
-  const isSpanish21 = route === 'play' && activeGame?.game === 'spanish21'
+  const isSpanish21 = route === 'play' && activeGame?.game === 'spanish21';
+
   if (isSpanish21) {
-    document.body.style.backgroundColor = '#8B0000'
-    document.documentElement.style.backgroundColor = '#8B0000'
+    document.body.style.backgroundColor = '#8B0000';   // red
+    document.documentElement.style.backgroundColor = '#8B0000';
   } else {
-    document.body.style.backgroundColor = ''
-    document.documentElement.style.backgroundColor = ''
+    document.body.style.backgroundColor = '#006400';   // green for blackjack
+    document.documentElement.style.backgroundColor = '#006400';
   }
   return () => {
-    document.body.style.backgroundColor = ''
-    document.documentElement.style.backgroundColor = ''
-  }
-}, [route, activeGame?.game])
+    document.body.style.backgroundColor = '';
+    document.documentElement.style.backgroundColor = '';
+  };
+}, [route, activeGame?.game]);
 
 
   const go = (next) => setRoute(next)
@@ -927,33 +928,31 @@ React.useEffect(() => {
     )
   }
 if (route === 'play' && activeGame) {
-  const isSpanish21 = activeGame.game === 'spanish21'
+const isSpanish21 = activeGame.game === 'spanish21';
 
-  return (
-    <div className="min-h-screen relative">
-      {/* global overrides only while Spanish 21 is active */}
-      {isSpanish21 && (
-        <style>{`
-          .s21-scope { background-color: #8B0000; min-height: 100vh; width: 100vw; }
-          .s21-scope .bg-gray-50 { background-color: #8B0000 !important; }
-          .s21-scope .bg-white { background-color: rgba(255,255,255,0.06) !important; }
-          .s21-scope .text-gray-900 { color: #fff !important; }
-          .s21-scope .text-gray-700 { color: #f5f5f5 !important; }
-          .s21-scope .border-gray-200 { border-color: rgba(255,255,255,0.15) !important; }
-        `}</style>
-      )}
+return (
+  <div className="min-h-screen relative">
+    {isSpanish21 && (
+      <style>{`
+        .s21-scope { background-color: #8B0000; min-height: 100vh; width: 100vw; }
+        .s21-scope .bg-gray-50 { background-color: #8B0000 !important; }
+        .s21-scope .bg-white { background-color: rgba(255,255,255,0.06) !important; }
+        .s21-scope .text-gray-900 { color: #fff !important; }
+        .s21-scope .text-gray-700 { color: #f5f5f5 !important; }
+        .s21-scope .border-gray-200 { border-color: rgba(255,255,255,0.15) !important; }
+      `}</style>
+    )}
 
-      <div className={isSpanish21 ? 's21-scope' : 'bg-gray-50'}>
-        {/* no TopNav here */}
-        <GameTable
-          mode={activeGame.mode}
-          settings={pendingSettings}
-          onBack={() => { setActiveGame(null); setRoute('home') }}
-          uiTheme={isSpanish21 ? 'casino-red' : 'default'}
-        />
-      </div>
+    <div className={isSpanish21 ? 's21-scope' : 'bg-green-700'}>
+      <GameTable
+        mode={activeGame.mode}
+        settings={pendingSettings}
+        onBack={() => { setActiveGame(null); setRoute('home'); }}
+        uiTheme={isSpanish21 ? 'casino-red' : 'default'}
+      />
     </div>
-  )
+  </div>
+);
 }
 
   return <Home onGo={go} />
