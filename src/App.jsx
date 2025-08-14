@@ -555,22 +555,23 @@ function StrategyChartPage({ onBack }) {
                       <th className="px-2 py-2 border border-gray-200 text-left">Surrender</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {perfectChart.rows.map((row, i) => {
-                      const c = row.columns || {}
-                      return (
-                        <tr key={i} className="odd:bg-white even:bg-gray-50">
-                          <td className="px-2 py-2 border border-gray-100 font-medium text-gray-900">{row.rowLabel}</td>
-                          <td className="px-2 py-2 border border-gray-100">{c['Hit Until Hard'] ?? ''}</td>
-                          <td className="px-2 py-2 border border-gray-100">{c['Hit Until Soft'] ?? ''}</td>
-                          <td className="px-2 py-2 border border-gray-100">{c['Double Hards'] ?? ''}</td>
-                          <td className="px-2 py-2 border border-gray-100">{c['Double Softs'] ?? ''}</td>
-                          <td className="px-2 py-2 border border-gray-100">{c['Splits'] ?? ''}</td>
-                          <td className="px-2 py-2 border border-gray-100">{c['Surrender'] ?? ''}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
+<tbody>
+  {perfectChart.rows.map((row, i) => {
+    const c = row.columns || {}
+    const renderCell = (val) => val && val.trim() !== '' ? val : '❌'
+    return (
+      <tr key={i} className="odd:bg-white even:bg-gray-50">
+        <td className="px-2 py-2 border border-gray-100 font-medium text-gray-900">{row.rowLabel}</td>
+        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Hard'])}</td>
+        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Soft'])}</td>
+        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Hards'])}</td>
+        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Softs'])}</td>
+        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Splits'])}</td>
+        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Surrender'])}</td>
+      </tr>
+    )
+  })}
+</tbody>
                 </table>
               </div>
             )}
