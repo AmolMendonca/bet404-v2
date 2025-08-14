@@ -1,6 +1,7 @@
 # backend/routes/settings.py
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
+from auth import require_user
 from models import get_db
 
 settings_bp = Blueprint('settings', __name__)
@@ -35,13 +36,15 @@ settings_bp = Blueprint('settings', __name__)
 # - User is hardcoded to test_user1 for now (TODO: replace with real auth).
 # =============================================================================
 @settings_bp.route('/settings_update', methods=['POST'])
+@require_user
 def settings_update():
     db, cur = get_db()
 
     data = request.get_json(force=True) or {}
-
+    user_id = g.user['id']
+    print(f"User id is {user_id} for settings edit")
     # TODO: replace with the authenticated user
-    user_id = "test_user1"
+    #user_id = "test_user1"
 
     hole_card       = data.get("Hole Card")            # exact string
     surrender_str   = data.get("Surrender")            # "Yes" | "No"
