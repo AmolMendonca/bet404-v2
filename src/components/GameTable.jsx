@@ -181,25 +181,39 @@ const labelForLetter = (l) => {
   }
 }
 
-// helpers for resolving hole mode
+// mapping helpers
 const canonicalHoleMode = (m) => {
   const s = String(m || '').trim()
   if (/4\s*[-_ ]?\s*10/i.test(s)) return '4-10'
   if (/2\s*[-_ ]?\s*3/i.test(s)) return '2-3'
   if (/perfect/i.test(s)) return 'perfect'
+  if (/A-?9/i.test(s)) return 'A-9'
   return s
 }
-const supportedHoleModes = ['4-10', '2-3']
-const resolveHoleMode = (m) => {
-  const s = canonicalHoleMode(m)
-  return supportedHoleModes.includes(s) ? s : '4-10'
+
+const supportedHoleModesForGrader = ['4-10', '2-3']
+const resolveHoleModeForGrader = (holeCardChoice) => {
+  const s = canonicalHoleMode(holeCardChoice)
+  if (supportedHoleModesForGrader.includes(s)) return s
+  return '4-10' // fallback for perfect and A-9 variants
 }
-const holeModeFromSettings = (s) => {
-  const hm = String(s?.hole_mode || '').toLowerCase()
+
+// client settings hole_mode from backend choice
+const clientHoleModeFromChoice = (choice) => {
+  if (choice === '4-10') return '4to10'
+  if (choice === '2-3') return '2to3'
+  if (choice === 'perfect') return 'perfect'
+  if (choice === 'A-9DAS' || choice === 'A-9NoDAS') return 'Ato9'
+  return 'perfect'
+}
+
+// backend choice string from client hole_mode
+const choiceFromClientHoleMode = (hm) => {
   if (hm === '4to10') return '4-10'
   if (hm === '2to3') return '2-3'
   if (hm === 'perfect') return 'perfect'
-  return null
+  if (hm === 'Ato9') return 'A-9DAS'
+  return 'perfect'
 }
 
 export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme, onSettingsChange }) {
@@ -225,27 +239,25 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
   const [handId, setHandId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  // settings modal
+  // in game settings modal
   const [showSettings, setShowSettings] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [localSettings, setLocalSettings] = useState(() => ({
-    hole_mode: settings?.hole_mode || 'perfect',
-    surrender_allowed: !!settings?.surrender_allowed,
-    soft17_hit: !!settings?.soft17_hit,
-    decks_count: Number.isFinite(settings?.decks_count) ? settings.decks_count : 6,
-    double_first_two: settings?.double_first_two || '10-11',
-  }))
+
+  // local editable settings mirror
+  const [holeCardChoice, setHoleCardChoice] = useState(() => choiceFromClientHoleMode(settings?.hole_mode || clientHoleModeFromChoice(mode)))
+  const [surrenderAllowed, setSurrenderAllowed] = useState(!!settings?.surrender_allowed)
+  const [soft17Hit, setSoft17Hit] = useState(!!settings?.soft17_hit)
+  const [decksCount, setDecksCount] = useState(Number.isFinite(settings?.decks_count) ? settings.decks_count : 6)
+  const [doubleAllowed, setDoubleAllowed] = useState(settings?.double_first_two || '10-11')
 
   useEffect(() => {
-    // sync if parent changes settings
-    setLocalSettings({
-      hole_mode: settings?.hole_mode || 'perfect',
-      surrender_allowed: !!settings?.surrender_allowed,
-      soft17_hit: !!settings?.soft17_hit,
-      decks_count: Number.isFinite(settings?.decks_count) ? settings.decks_count : 6,
-      double_first_two: settings?.double_first_two || '10-11',
-    })
-  }, [settings])
+    // sync with parent settings if they change
+    setHoleCardChoice(choiceFromClientHoleMode(settings?.hole_mode || clientHoleModeFromChoice(mode)))
+    setSurrenderAllowed(!!settings?.surrender_allowed)
+    setSoft17Hit(!!settings?.soft17_hit)
+    setDecksCount(Number.isFinite(settings?.decks_count) ? settings.decks_count : 6)
+    setDoubleAllowed(settings?.double_first_two || '10-11')
+  }, [settings, mode])
 
   const normalizeRank = (v) => {
     if (!v) return v
@@ -274,7 +286,6 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     return value
   }
 
-  // helper for soft or hard total
   const getHandInfo = (hand) => {
     let total = 0
     let aces = 0
@@ -380,10 +391,9 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     fetchNewHand();
   }
 
-  // choose candidate from settings or incoming mode, then resolve to supported for grading
-  const candidateMode = holeModeFromSettings(localSettings) || holeModeFromSettings(settings) || mode
-  const resolved = resolveHoleMode(candidateMode)
-  const unsupportedMode = !supportedHoleModes.includes(String(canonicalHoleMode(candidateMode)))
+  // which hole mode to grade with
+  const resolvedForGrader = resolveHoleModeForGrader(holeCardChoice)
+  const unsupportedMode = !supportedHoleModesForGrader.includes(canonicalHoleMode(holeCardChoice))
 
   const sendDecisionForGrading = async (action) => {
     if (!initialDeal) return;
@@ -391,7 +401,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     setSubmitting(true);
     try {
       const payload = {
-        hole_mode: resolved, // always one of 4-10 or 2-3
+        hole_mode: resolvedForGrader, // '4-10' or '2-3'
         player_cards: (initialDeal.player_cards || []).map(c => ({
           rank: rankForBackend(c.value),
           suit: c.suit
@@ -403,10 +413,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
         action: toBackendLetter(action)
       };
 
-      console.log('[grade] using hole_mode', { candidateMode, resolved });
-      console.log('[grade] player ranks', (initialDeal.player_cards || []).map(c => c.value))
-      console.log('[grade] dealer up rank', initialDeal.dealer_upcard?.value)
-      console.log('[grade] payload', payload);
+      console.log('[grade] using hole_mode', resolvedForGrader);
 
       const res = await authFetch(gradeEndpoint, {
         method: 'POST',
@@ -471,9 +478,9 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
   const decisionBg = isCorrect === null ? 'bg-white/5' : isCorrect ? 'bg-green-500/15' : 'bg-red-500/15'
   const decisionText = isCorrect === null ? 'text-white' : isCorrect ? 'text-green-300' : 'text-red-300'
 
-  // derive if double is allowed from local settings
+  // double availability from settings
   const { total: pTotal, soft: pSoft } = getHandInfo(playerHand)
-  const dblRule = String(localSettings?.double_first_two || '10-11').toLowerCase()
+  const dblRule = String(doubleAllowed || '10-11').toLowerCase()
   let canDoubleFirstTwo = false
   if (playerHand.length === 2 && !pSoft) {
     if (dblRule === 'any') canDoubleFirstTwo = pTotal >= 4 && pTotal <= 21
@@ -487,20 +494,19 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
         ? 'Double is available on hard 9, 10, or 11 on the first two cards'
         : 'Double is available on hard 10 or 11 on the first two cards'
 
-  // save settings from modal
+  // save settings to backend and update local
   const saveSettings = async () => {
     setSaving(true)
     try {
-      // build backend payload shape you already use elsewhere
+      // build backend payload with exact keys and allowed values
+      const decksToSend = (holeCardChoice === 'A-9DAS' || holeCardChoice === 'A-9NoDAS') ? 1 : Number(decksCount) || 6
+
       const payload = {
-        'Hole Card': localSettings.hole_mode === '4to10' ? '4-10'
-          : localSettings.hole_mode === '2to3' ? '2-3'
-          : localSettings.hole_mode === 'Ato9' ? 'A-9DAS' // choose a default if ever used
-          : 'perfect',
-        'Surrender': localSettings.surrender_allowed ? 'Yes' : 'No',
-        'Dealer_soft_17': localSettings.soft17_hit ? 'Hit' : 'Stand',
-        'Decks': Number(localSettings.decks_count) || 6,
-        'Double allowed': localSettings.double_first_two || '10-11'
+        'Hole Card': holeCardChoice, // "perfect" | "4-10" | "2-3" | "A-9DAS" | "A-9NoDAS"
+        'Surrender': surrenderAllowed ? 'Yes' : 'No',
+        'Dealer_soft_17': soft17Hit ? 'Hit' : 'Stand',
+        'Decks': decksToSend, // 1 | 4 | 5 | 6
+        'Double allowed': doubleAllowed // "any" | "9-11" | "10-11"
       }
 
       const res = await authFetch(settingsEndpoint, {
@@ -512,8 +518,17 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
         throw new Error(`HTTP ${res.status} ${errText || ''}`.trim())
       }
 
+      // update our local client settings mirror
+      const nextLocal = {
+        hole_mode: clientHoleModeFromChoice(holeCardChoice),
+        surrender_allowed: surrenderAllowed,
+        soft17_hit: soft17Hit,
+        decks_count: decksToSend,
+        double_first_two: doubleAllowed
+      }
+
       // notify parent if provided
-      onSettingsChange?.(localSettings)
+      onSettingsChange?.(nextLocal)
 
       setShowSettings(false)
     } catch (e) {
@@ -523,6 +538,8 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
       setSaving(false)
     }
   }
+
+  const disableDecks = holeCardChoice === 'A-9DAS' || holeCardChoice === 'A-9NoDAS'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-900 to-black">
@@ -538,8 +555,8 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
           </button>
           <div className="flex items-center space-x-6">
             <div className="text-white">
-              <span className="text-sm text-white/60">Mode: </span>
-              <span className="font-semibold capitalize">{String(candidateMode).replace(/([A-Z])/g, ' $1')}</span>
+              <span className="text-sm text-white/60">Hole Card: </span>
+              <span className="font-semibold">{holeCardChoice}</span>
             </div>
             <button onClick={() => setShowSettings(true)} className="text-white/60 hover:text-white transition-colors">
               <Settings className="w-5 h-5" />
@@ -551,7 +568,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
       <div className="relative z-10 max-w-7xl mx-auto px-4 py-8">
         {unsupportedMode && (
           <div className="mb-4 rounded-lg border border-yellow-400/40 bg-yellow-500/10 text-yellow-300 px-4 py-3">
-            Mode not supported, grading will use {resolved}
+            Mode not supported for grading, grader will use {resolvedForGrader}
           </div>
         )}
 
@@ -688,7 +705,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
           </div>
 
           <div className="lg:col-span-1">
-            <StatsPanel stats={stats} mode={String(candidateMode)} />
+            <StatsPanel stats={stats} mode={holeCardChoice} />
             <div className="mt-6 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
               <h3 className="text-white font-semibold mb-3 flex items-center">
                 <AlertCircle className="w-5 h-5 mr-2" />
@@ -715,14 +732,16 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                 <label className="block mb-1">Hole card</label>
                 <select
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                  value={localSettings.hole_mode}
-                  onChange={(e)=>setLocalSettings(s=>({ ...s, hole_mode: e.target.value }))}
+                  value={holeCardChoice}
+                  onChange={(e)=>setHoleCardChoice(e.target.value)}
                 >
-                  <option value="perfect">perfect</option>
-                  <option value="4to10">4to10</option>
-                  <option value="2to3">2to3</option>
+                  <option value="perfect">Perfect</option>
+                  <option value="4-10">4-10</option>
+                  <option value="2-3">2-3</option>
+                  <option value="A-9DAS">A-9 DAS</option>
+                  <option value="A-9NoDAS">A-9 NoDAS</option>
                 </select>
-                <p className="mt-1 text-xs text-gray-500">Grader uses 4 to 10 or 2 to 3 buckets</p>
+                <p className="mt-1 text-xs text-gray-500">Grader uses 4 to 10 or 2 to 3. Other modes fall back to 4 to 10 for grading</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -730,8 +749,8 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                   <label className="block mb-1">Surrender</label>
                   <select
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                    value={localSettings.surrender_allowed ? 'Yes' : 'No'}
-                    onChange={(e)=>setLocalSettings(s=>({ ...s, surrender_allowed: e.target.value === 'Yes' }))}
+                    value={surrenderAllowed ? 'Yes' : 'No'}
+                    onChange={(e)=>setSurrenderAllowed(e.target.value === 'Yes')}
                   >
                     <option value="Yes">Yes</option>
                     <option value="No">No</option>
@@ -742,8 +761,8 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                   <label className="block mb-1">Dealer soft 17</label>
                   <select
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                    value={localSettings.soft17_hit ? 'Hit' : 'Stand'}
-                    onChange={(e)=>setLocalSettings(s=>({ ...s, soft17_hit: e.target.value === 'Hit' }))}
+                    value={soft17Hit ? 'Hit' : 'Stand'}
+                    onChange={(e)=>setSoft17Hit(e.target.value === 'Hit')}
                   >
                     <option value="Hit">Hit</option>
                     <option value="Stand">Stand</option>
@@ -755,23 +774,25 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                 <div>
                   <label className="block mb-1">Decks</label>
                   <select
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                    value={String(localSettings.decks_count)}
-                    onChange={(e)=>setLocalSettings(s=>({ ...s, decks_count: Number(e.target.value) }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                    value={String(decksCount)}
+                    onChange={(e)=>setDecksCount(Number(e.target.value))}
+                    disabled={disableDecks}
                   >
                     <option value="1">1</option>
                     <option value="4">4</option>
                     <option value="5">5</option>
                     <option value="6">6</option>
                   </select>
+                  {disableDecks && <p className="mt-1 text-xs text-gray-500">Decks fixed to 1 for A 9 modes</p>}
                 </div>
 
                 <div>
                   <label className="block mb-1">Double allowed</label>
                   <select
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                    value={localSettings.double_first_two}
-                    onChange={(e)=>setLocalSettings(s=>({ ...s, double_first_two: e.target.value }))}
+                    value={doubleAllowed}
+                    onChange={(e)=>setDoubleAllowed(e.target.value)}
                   >
                     <option value="any">any</option>
                     <option value="9-11">9-11</option>

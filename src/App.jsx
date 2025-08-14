@@ -1286,12 +1286,14 @@ React.useEffect(() => {
 
         <div className={isSpanish21 ? 's21-scope' : 'bg-green-700'}>
 <GameTable
-   mode={activeGame.mode}
-   settings={pendingSettings}
-   onSettingsChange={(next) => setPendingSettings(next)}
-   onBack={() => { setActiveGame(null); setRoute('home'); }}
-   uiTheme={isSpanish21 ? 'casino-red' : 'default'}
-/>        </div>
+  mode={activeGame.mode}
+  settings={pendingSettings}
+  onSettingsChange={(next) => setPendingSettings(next)} // <-- only new line
+  onBack={() => { setActiveGame(null); setRoute('home'); }}
+  uiTheme={isSpanish21 ? 'casino-red' : 'default'}
+/> 
+
+</div>
       </div>
     );
   }
