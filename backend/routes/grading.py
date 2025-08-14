@@ -22,7 +22,8 @@ Response JSON:
 }
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
+from auth import require_user
 from models import get_db
 
 grading_bp = Blueprint('grading', __name__)
@@ -154,13 +155,15 @@ def _result_payload(hole_mode, attempted, resolved, correct=None, meta=None):
 # -------------------------
 
 @grading_bp.route('/grade', methods=['POST'])
+@require_user
 def grade():
     db, cur = get_db()
 
     data = request.get_json(force=True) or {}
 
     # User (TODO: swap to auth/JWT later)
-    user_id = data.get('user_id') or 'test_user1'
+    # user_id = data.get('user_id') or 'test_user1'
+    user_id = g.user['id']
 
     # Pull user settings (surrender + H17/S17 matter in V1)
     cur.execute("""
@@ -172,7 +175,9 @@ def grade():
 
     # Mode: DB takes precedence; otherwise payload fallback
     hole_mode = (s['hole_card'] if s else None) or data.get('hole_mode') or '4-10'
-    hole_mode = data.get('hole_mode')
+    # REMOVE this buggy overwrite line:
+    # hole_mode = data.get('hole_mode')
+
     surrender_allowed = bool(s['surrender_allowed']) if s else True
     soft17_hit        = bool(s['soft17_hit'])        if s else False
     double_first_two  = (s['double_first_two'] if s else None) or 'any'
@@ -181,7 +186,7 @@ def grade():
     dealer_up    = data.get('dealer_up', {})
     attempted    = (data.get('action') or '').upper().strip()
 
-    if hole_mode == '4-10':
+    if hole_mode in ('4-10', '2-3', 'A-9DAS', 'A-9NoDAS'):
         result = _grade_4to10(
             user_id,
             player_cards,
@@ -190,19 +195,7 @@ def grade():
             surrender_allowed,
             soft17_hit,
             double_first_two,
-            hole_mode,
-            cur
-        )
-    elif hole_mode == '2-3':
-        result = _grade_4to10(
-            user_id,
-            player_cards,
-            dealer_up,
-            attempted,
-            surrender_allowed,
-            soft17_hit,
-            double_first_two,
-            hole_mode,
+            hole_mode,   # pass the actual mode
             cur
         )
     elif hole_mode == 'perfect':
@@ -211,6 +204,53 @@ def grade():
         return jsonify({"error": f"Unknown hole_mode '{hole_mode}'"}), 400
 
     # TODO: persist stats in user_stats here (increment totals/errors) in a tx.
+
+    if isinstance(result, dict) and "mode" in result and "is_correct" in result:
+        m = result["mode"]
+        is_correct = bool(result["is_correct"])
+        err_inc = 0 if is_correct else 1
+
+        if m == "4-10":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_4to10_hands  = total_4to10_hands  + 1,
+                    errors_4to10_hands = errors_4to10_hands + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
+        elif m == "2-3":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_2to3_hands  = total_2to3_hands  + 1,
+                    errors_2to3_hands = errors_2to3_hands + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
+        elif m == "A-9DAS":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_a9das_hands  = total_a9das_hands  + 1,
+                    errors_a9das_hands = errors_a9das_hands + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
+        elif m == "A-9NoDAS":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_a9nodas_hands  = total_a9nodas_hands  + 1,
+                    errors_a9nodas_hands = errors_a9nodas_hands + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
+        elif m == "perfect":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_perfect_hands   = total_perfect_hands   + 1,
+                    errors_perfect_hands  = errors_perfect_hands  + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
+        db.commit()
     return jsonify(result)
 
 # -------------------------
@@ -258,11 +298,15 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
     # If frontend accidentally sends trivial 19+ non-pair, stand
     if total >= 19 and not pair:
         resolved = 'S'
-        
-        return _result_payload('4-10', attempted, resolved,
-                               meta={"reason": "auto-stand on 19+ (non-pair)",
-                                     "dealer_val": dealer_val,
-                                     "total": total, "soft": soft})
+        return _result_payload(
+            mode, attempted, resolved,
+            meta={
+                "reason": "auto-stand on 19+ (non-pair)",
+                "dealer_val": dealer_val,
+                "total": total,
+                "soft": soft
+            }
+        )
 
     # Pull cell from chart
 
@@ -290,19 +334,24 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
     cell = cur.fetchone()
     
     if not cell:
-        # Safe fallback
         fallback = 'H' if total < 17 else 'S'
-        return _result_payload('4-10', attempted, fallback,
-                               meta={"reason": "no chart cell found",
-                                     "dealer_val": dealer_val, "total": total,
-                                     "soft": soft, "pair": pair})
+        return _result_payload(
+            mode, attempted, fallback,
+            meta={
+                "reason": "no chart cell found",
+                "dealer_val": dealer_val,
+                "total": total,
+                "soft": soft,
+                "pair": pair
+            }
+        )
 
-    reco_cell = cell['recommended_move']  # e.g., 'DS', 'RH/H', 'P', 'S'
+    reco_cell = cell['recommended_move']
     resolved = _resolve_cell(reco_cell, soft17_hit, surrender_allowed, double_allowed)
     is_correct = (attempted == resolved)
 
     return _result_payload(
-        '4-10', attempted, resolved, is_correct,
+        mode, attempted, resolved, is_correct,
         meta={
             "dealer_val": dealer_val,
             "total": total,
@@ -315,4 +364,3 @@ def _grade_4to10(user_id, player_cards, dealer_up, attempted,
             "double_allowed": double_allowed
         }
     )
- 

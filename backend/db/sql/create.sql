@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS user_settings (
   user_id          TEXT       PRIMARY KEY REFERENCES users(user_id),
   hole_card        TEXT       NOT NULL
-                    CHECK (hole_card IN ('4-10','2-3','perfect')),
+                    CHECK (hole_card IN ('4-10','2-3','perfect', 'A-9DAS', 'A-9NoDAS')),
   surrender_allowed BOOLEAN    NOT NULL,
   soft17_hit       BOOLEAN    NOT NULL,
   decks_count      INT        NOT NULL,
@@ -20,23 +20,31 @@ CREATE TABLE IF NOT EXISTS user_settings (
 );
 
 -- 3) User Stats
-CREATE TABLE IF NOT EXISTS user_stats (
-  user_id             TEXT PRIMARY KEY REFERENCES users(user_id),
-  total_4to10_hands   INT  NOT NULL DEFAULT 0,
-  errors_4to10_hands  INT  NOT NULL DEFAULT 0,
-  total_2to3_hands    INT  NOT NULL DEFAULT 0,
-  errors_2to3_hands   INT  NOT NULL DEFAULT 0,
-  total_perfect_hands INT  NOT NULL DEFAULT 0,
-  errors_perfect_hands INT NOT NULL DEFAULT 0
+CREATE TABLE user_stats (
+  user_id                  TEXT PRIMARY KEY REFERENCES users(user_id),
+  total_4to10_hands        INT  NOT NULL DEFAULT 0,
+  errors_4to10_hands       INT  NOT NULL DEFAULT 0,
+  total_2to3_hands         INT  NOT NULL DEFAULT 0,
+  errors_2to3_hands        INT  NOT NULL DEFAULT 0,
+  total_perfect_hands      INT  NOT NULL DEFAULT 0,
+  errors_perfect_hands     INT  NOT NULL DEFAULT 0,
+  total_a9das_hands        INT  NOT NULL DEFAULT 0,
+  errors_a9das_hands       INT  NOT NULL DEFAULT 0,
+  total_a9nodas_hands      INT  NOT NULL DEFAULT 0,
+  errors_a9nodas_hands     INT  NOT NULL DEFAULT 0
 );
 
 -- 4) Charts
-CREATE TABLE IF NOT EXISTS charts (
+CREATE TABLE charts (
   chart_id SERIAL PRIMARY KEY,
-  user_id  TEXT   REFERENCES users(user_id),
-  mode     TEXT   NOT NULL
-             CHECK (mode IN ('4-10','2-3','perfect')),
-    UNIQUE (user_id, mode)
+  user_id  TEXT REFERENCES users(user_id),
+  mode     TEXT NOT NULL
+           CHECK (mode IN (
+             '4-10','2-3','perfect',
+             'A-9DAS','A-9NoDAS',
+             'Spanish_perfect','Spanish_2to3','Spanish_4to9'
+           )),
+  UNIQUE (user_id, mode)
 );
 
 -- 5) Chart Entries

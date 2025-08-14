@@ -36,7 +36,7 @@ def deal_newhand():
         WHERE user_id = %s
     """, (user_id,))
     s = cur.fetchone()
-    print(f"user fetched is nine other than {s}")
+    print(f"settings fetched is nine other than {s}")
 
     # defaults if not found
     hole_mode         = (s['hole_card'] if s else '4-10')
@@ -116,6 +116,8 @@ def deal_newhand():
         {'suit': player_cards[0]['suit'], 'rank': _to_frontend_rank(player_cards[0]['rank'])},
         {'suit': player_cards[1]['suit'], 'rank': _to_frontend_rank(player_cards[1]['rank'])},
     ]
+
+    print(f"The decks count is nothing but {decks_count}")
 
     return jsonify({
         'player_cards': player_cards_out,
