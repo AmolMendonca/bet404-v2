@@ -250,17 +250,31 @@ function StrategyChartPage({ onBack }) {
     return fetch(path, { ...init, headers, credentials: 'include' })
   }
 
-  const getActionColor = (raw) => {
-    const a = String(raw || '').toUpperCase()
-    const head = a[0] || ''
-    if (head === 'H') return 'bg-red-100 text-red-800'
-    if (head === 'S') return 'bg-green-100 text-green-800'
-    if (head === 'D') return 'bg-blue-100 text-blue-800'
-    if (head === 'P') return 'bg-purple-100 text-purple-800'
-    if (head === 'R') return 'bg-orange-100 text-orange-800'
-    return 'bg-gray-100 text-gray-800'
-  }
+const getActionColor = (raw) => {
+  const a = String(raw || '').toUpperCase()
+  const head = a[0] || ''
 
+  // Red for Stand
+  if (head === 'S') return 'bg-red-100 text-red-800'
+
+  // Yellow for Hit
+  if (head === 'H') return 'bg-yellow-100 text-yellow-800'
+
+  // Green for Double
+  if (head === 'D' && !a.startsWith('DS') && !a.startsWith('D/S')) return 'bg-green-100 text-green-800'
+
+  // Light green for things like DS or D/S
+  if (a.startsWith('DS') || a.startsWith('D/S')) return 'bg-green-50 text-green-700'
+
+  // Blue for Split
+  if (head === 'P') return 'bg-blue-100 text-blue-800'
+
+  // Light blue for things like RH or PRH
+  if (a.startsWith('RH') || a.includes('PRH')) return 'bg-blue-50 text-blue-700'
+
+  // Default gray
+  return 'bg-gray-100 text-gray-800'
+}
   const getDealerIndex = (v) => {
     const m = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'10':8,'A':9 }
     return m[v] ?? -1
@@ -469,11 +483,32 @@ function StrategyChartPage({ onBack }) {
             {showLegend && (
               <div className="mt-2 text-xs text-gray-700 space-y-2">
                 <div className="grid grid-cols-5 gap-2">
-                  <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-red-100 text-red-800 font-medium">H</span><span>Hit</span></div>
-                  <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-green-100 text-green-800 font-medium">S</span><span>Stand</span></div>
-                  <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">D</span><span>Double</span></div>
-                  <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-purple-100 text-purple-800 font-medium">P</span><span>Split</span></div>
-                  <div className="flex items-center space-x-2"><span className="px-2 py-1 rounded bg-orange-100 text-orange-800 font-medium">R</span><span>Surrender</span></div>
+<div className="flex flex-wrap gap-3">
+  <div className="flex items-center space-x-2">
+    <span className="px-2 py-1 rounded bg-red-100 text-red-800 font-medium">S</span>
+    <span>Stand</span>
+  </div>
+  <div className="flex items-center space-x-2">
+    <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 font-medium">H</span>
+    <span>Hit</span>
+  </div>
+  <div className="flex items-center space-x-2">
+    <span className="px-2 py-1 rounded bg-green-100 text-green-800 font-medium">D</span>
+    <span>Double</span>
+  </div>
+  <div className="flex items-center space-x-2">
+    <span className="px-2 py-1 rounded bg-green-50 text-green-700 font-medium">DS</span>
+    <span>DS / D/S</span>
+  </div>
+  <div className="flex items-center space-x-2">
+    <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">P</span>
+    <span>Split</span>
+  </div>
+  <div className="flex items-center space-x-2">
+    <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-medium">RH</span>
+    <span>RH / PRH</span>
+  </div>
+</div>
                 </div>
                 <div className="mt-2">
                   <div className="font-medium">Syntax</div>
