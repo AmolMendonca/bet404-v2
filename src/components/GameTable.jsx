@@ -40,7 +40,43 @@ const authFetch = async (path, init = {}) => {
   return fetch(path, { ...init, headers, credentials: 'include' })
 }
 
-const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) => {
+// style helpers for hidden dealer card by hole card mode
+const holeModeClasses = (mode) => {
+  const m = String(mode || '').trim()
+  if (m === '4-10') {
+    return {
+      border: 'border-blue-400',
+      ring: 'ring-4 ring-blue-200',
+      grad: 'bg-gradient-to-br from-blue-500/20 to-blue-700/20',
+      badge: 'bg-blue-500'
+    }
+  }
+  if (m === '2-3') {
+    return {
+      border: 'border-amber-400',
+      ring: 'ring-4 ring-amber-200',
+      grad: 'bg-gradient-to-br from-amber-500/20 to-amber-700/20',
+      badge: 'bg-amber-500'
+    }
+  }
+  if (m === 'A-9DAS' || m === 'A-9NoDAS') {
+    return {
+      border: 'border-emerald-400',
+      ring: 'ring-4 ring-emerald-200',
+      grad: 'bg-gradient-to-br from-emerald-500/20 to-emerald-700/20',
+      badge: 'bg-emerald-500'
+    }
+  }
+  // default
+  return {
+    border: 'border-purple-400',
+    ring: 'ring-4 ring-purple-200',
+    grad: 'bg-gradient-to-br from-purple-500/20 to-purple-700/20',
+    badge: 'bg-purple-500'
+  }
+}
+
+const Card = ({ value, suit, hidden = false, highlight = false, mini = false, mode = 'perfect' }) => {
   const getSuitIcon = () => {
     switch(suit) {
       case 'hearts': return <Heart className={`${mini ? 'w-3 h-3' : 'w-5 h-5'} fill-red-500 text-red-500`} />
@@ -53,25 +89,26 @@ const Card = ({ value, suit, hidden = false, highlight = false, mini = false }) 
   const getColor = () => ['hearts', 'diamonds'].includes(suit) ? 'text-red-500' : 'text-gray-900'
 
   if (hidden) {
+    const cls = holeModeClasses(mode)
     return (
       <div className={`
         ${mini ? 'w-12 h-16' : 'w-20 h-28'} 
         bg-white rounded-lg shadow-xl 
-        border-2 border-purple-400
+        border-2 ${cls.border}
         flex flex-col items-center justify-between 
         p-2 transform transition-all duration-300 
         hover:shadow-2xl hover:-translate-y-1
         relative overflow-hidden
-        ring-4 ring-purple-200
+        ${cls.ring}
       `}>
         <div className={`${getColor()} font-bold ${mini ? 'text-xs' : 'text-lg'}`}>{value}</div>
         {getSuitIcon()}
         <div className={`${getColor()} font-bold ${mini ? 'text-xs' : 'text-lg'}`}>{value}</div>
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-purple-700/20 rounded-lg"></div>
-        <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-1">
+        <div className={`absolute inset-0 ${cls.grad} rounded-lg`}></div>
+        <div className={`absolute top-1 right-1 ${cls.badge} rounded-full p-1`}>
           <Eye className="w-3 h-3 text-white" />
         </div>
-        <div className="absolute bottom-1 left-1 bg-purple-500 text-white text-[7px] font-bold px-1 rounded">
+        <div className={`absolute bottom-1 left-1 ${cls.badge} text-white text-[7px] font-bold px-1 rounded`}>
           HOLE
         </div>
       </div>
@@ -583,7 +620,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
               </div>
               <div className="flex justify-center space-x-3">
                 {dealerHand.map((card, idx) => (<Card key={idx} {...card} />))}
-                {dealerHoleCard && !showHoleCard && (<Card {...dealerHoleCard} hidden />)}
+                {dealerHoleCard && !showHoleCard && (<Card {...dealerHoleCard} hidden mode={holeCardChoice} />)}
                 {dealerHoleCard && showHoleCard && (<Card {...dealerHoleCard} highlight />)}
               </div>
             </div>
@@ -682,11 +719,11 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                     onClick={onDouble}
                     disabled={submitting || countdownActive || !canDoubleFirstTwo}
                     variant="warning"
-                    icon={DollarSign}
+                    
                   >
                     Double
                   </ActionButton>
-                  <ActionButton onClick={onSplit} disabled={submitting || countdownActive} variant="warning" icon={Split}>Split</ActionButton>
+                  <ActionButton onClick={onSplit} disabled={submitting || countdownActive} variant="warning">Split</ActionButton>
                   <ActionButton onClick={onSurrender} disabled={submitting || countdownActive} variant="danger">Surrender</ActionButton>
                 </div>
               )}
