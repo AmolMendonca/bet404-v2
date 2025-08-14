@@ -29,6 +29,7 @@ if (!window.__fetchLoggerInstalled) {
 }
 
 const gradeEndpoint = '/api/grade';
+const settingsEndpoint = '/api/settings_update'
 
 // authenticated fetch helper, adds Supabase token and sends cookies
 const authFetch = async (path, init = {}) => {
@@ -180,7 +181,28 @@ const labelForLetter = (l) => {
   }
 }
 
-export default function GameTable({ mode = 'perfect', onBack }) {
+// helpers for resolving hole mode
+const canonicalHoleMode = (m) => {
+  const s = String(m || '').trim()
+  if (/4\s*[-_ ]?\s*10/i.test(s)) return '4-10'
+  if (/2\s*[-_ ]?\s*3/i.test(s)) return '2-3'
+  if (/perfect/i.test(s)) return 'perfect'
+  return s
+}
+const supportedHoleModes = ['4-10', '2-3']
+const resolveHoleMode = (m) => {
+  const s = canonicalHoleMode(m)
+  return supportedHoleModes.includes(s) ? s : '4-10'
+}
+const holeModeFromSettings = (s) => {
+  const hm = String(s?.hole_mode || '').toLowerCase()
+  if (hm === '4to10') return '4-10'
+  if (hm === '2to3') return '2-3'
+  if (hm === 'perfect') return 'perfect'
+  return null
+}
+
+export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme, onSettingsChange }) {
   const [gameState, setGameState] = useState('betting')
   const [deck, setDeck] = useState([])
   const [playerHand, setPlayerHand] = useState([])
@@ -203,6 +225,28 @@ export default function GameTable({ mode = 'perfect', onBack }) {
   const [handId, setHandId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // settings modal
+  const [showSettings, setShowSettings] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [localSettings, setLocalSettings] = useState(() => ({
+    hole_mode: settings?.hole_mode || 'perfect',
+    surrender_allowed: !!settings?.surrender_allowed,
+    soft17_hit: !!settings?.soft17_hit,
+    decks_count: Number.isFinite(settings?.decks_count) ? settings.decks_count : 6,
+    double_first_two: settings?.double_first_two || '10-11',
+  }))
+
+  useEffect(() => {
+    // sync if parent changes settings
+    setLocalSettings({
+      hole_mode: settings?.hole_mode || 'perfect',
+      surrender_allowed: !!settings?.surrender_allowed,
+      soft17_hit: !!settings?.soft17_hit,
+      decks_count: Number.isFinite(settings?.decks_count) ? settings.decks_count : 6,
+      double_first_two: settings?.double_first_two || '10-11',
+    })
+  }, [settings])
+
   const normalizeRank = (v) => {
     if (!v) return v
     const s = String(v).toUpperCase()
@@ -212,19 +256,6 @@ export default function GameTable({ mode = 'perfect', onBack }) {
   const rankForBackend = (v) => {
     if (v === '10') return 'T'
     return v
-  }
-
-  const canonicalHoleMode = (m) => {
-    const s = String(m || '').trim()
-    if (/4\s*[-_ ]?\s*10/i.test(s)) return '4-10'
-    if (/2\s*[-_ ]?\s*3/i.test(s)) return '2-3'
-    return s
-  }
-
-  const supportedHoleModes = ['4-10', '2-3']
-  const resolveHoleMode = (m) => {
-    const s = canonicalHoleMode(m)
-    return supportedHoleModes.includes(s) ? s : '4-10'
   }
 
   const isTenValue = (v) => ['T','J','Q','K'].includes(v)
@@ -349,14 +380,18 @@ export default function GameTable({ mode = 'perfect', onBack }) {
     fetchNewHand();
   }
 
+  // choose candidate from settings or incoming mode, then resolve to supported for grading
+  const candidateMode = holeModeFromSettings(localSettings) || holeModeFromSettings(settings) || mode
+  const resolved = resolveHoleMode(candidateMode)
+  const unsupportedMode = !supportedHoleModes.includes(String(canonicalHoleMode(candidateMode)))
+
   const sendDecisionForGrading = async (action) => {
     if (!initialDeal) return;
     if (submitting || countdownActive) return;
     setSubmitting(true);
     try {
-      const resolvedMode = resolveHoleMode(mode)
       const payload = {
-        hole_mode: resolvedMode,
+        hole_mode: resolved, // always one of 4-10 or 2-3
         player_cards: (initialDeal.player_cards || []).map(c => ({
           rank: rankForBackend(c.value),
           suit: c.suit
@@ -368,7 +403,7 @@ export default function GameTable({ mode = 'perfect', onBack }) {
         action: toBackendLetter(action)
       };
 
-      console.log('[grade] using hole_mode', { incomingMode: mode, resolvedMode });
+      console.log('[grade] using hole_mode', { candidateMode, resolved });
       console.log('[grade] player ranks', (initialDeal.player_cards || []).map(c => c.value))
       console.log('[grade] dealer up rank', initialDeal.dealer_upcard?.value)
       console.log('[grade] payload', payload);
@@ -432,16 +467,62 @@ export default function GameTable({ mode = 'perfect', onBack }) {
     (isTenValue(playerHand[0].value) && isTenValue(playerHand[1].value))
   );
 
-  const resolved = resolveHoleMode(mode)
-  const unsupportedMode = !supportedHoleModes.includes(String(canonicalHoleMode(mode)));
-
   const decisionColor = isCorrect === null ? 'border-white/20' : isCorrect ? 'border-green-500' : 'border-red-500'
   const decisionBg = isCorrect === null ? 'bg-white/5' : isCorrect ? 'bg-green-500/15' : 'bg-red-500/15'
   const decisionText = isCorrect === null ? 'text-white' : isCorrect ? 'text-green-300' : 'text-red-300'
 
-  // derive if double is allowed
+  // derive if double is allowed from local settings
   const { total: pTotal, soft: pSoft } = getHandInfo(playerHand)
-  const canDoubleHard1011 = playerHand.length === 2 && !pSoft && (pTotal === 10 || pTotal === 11)
+  const dblRule = String(localSettings?.double_first_two || '10-11').toLowerCase()
+  let canDoubleFirstTwo = false
+  if (playerHand.length === 2 && !pSoft) {
+    if (dblRule === 'any') canDoubleFirstTwo = pTotal >= 4 && pTotal <= 21
+    else if (dblRule === '9-11') canDoubleFirstTwo = [9, 10, 11].includes(pTotal)
+    else canDoubleFirstTwo = [10, 11].includes(pTotal)
+  }
+  const dblHint =
+    dblRule === 'any'
+      ? 'Double is available on any hard total on the first two cards'
+      : dblRule === '9-11'
+        ? 'Double is available on hard 9, 10, or 11 on the first two cards'
+        : 'Double is available on hard 10 or 11 on the first two cards'
+
+  // save settings from modal
+  const saveSettings = async () => {
+    setSaving(true)
+    try {
+      // build backend payload shape you already use elsewhere
+      const payload = {
+        'Hole Card': localSettings.hole_mode === '4to10' ? '4-10'
+          : localSettings.hole_mode === '2to3' ? '2-3'
+          : localSettings.hole_mode === 'Ato9' ? 'A-9DAS' // choose a default if ever used
+          : 'perfect',
+        'Surrender': localSettings.surrender_allowed ? 'Yes' : 'No',
+        'Dealer_soft_17': localSettings.soft17_hit ? 'Hit' : 'Stand',
+        'Decks': Number(localSettings.decks_count) || 6,
+        'Double allowed': localSettings.double_first_two || '10-11'
+      }
+
+      const res = await authFetch(settingsEndpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status} ${errText || ''}`.trim())
+      }
+
+      // notify parent if provided
+      onSettingsChange?.(localSettings)
+
+      setShowSettings(false)
+    } catch (e) {
+      console.error('settings save error', e)
+      alert('Could not save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-900 to-black">
@@ -458,9 +539,9 @@ export default function GameTable({ mode = 'perfect', onBack }) {
           <div className="flex items-center space-x-6">
             <div className="text-white">
               <span className="text-sm text-white/60">Mode: </span>
-              <span className="font-semibold capitalize">{String(mode).replace(/([A-Z])/g, ' $1')}</span>
+              <span className="font-semibold capitalize">{String(candidateMode).replace(/([A-Z])/g, ' $1')}</span>
             </div>
-            <button className="text-white/60 hover:text-white transition-colors">
+            <button onClick={() => setShowSettings(true)} className="text-white/60 hover:text-white transition-colors">
               <Settings className="w-5 h-5" />
             </button>
           </div>
@@ -582,7 +663,7 @@ export default function GameTable({ mode = 'perfect', onBack }) {
                   <ActionButton onClick={onStand} disabled={submitting || countdownActive} variant="secondary">Stand</ActionButton>
                   <ActionButton
                     onClick={onDouble}
-                    disabled={submitting || countdownActive || !canDoubleHard1011}
+                    disabled={submitting || countdownActive || !canDoubleFirstTwo}
                     variant="warning"
                     icon={DollarSign}
                   >
@@ -599,15 +680,15 @@ export default function GameTable({ mode = 'perfect', onBack }) {
               )}
             </div>
 
-            {gameState === 'playing' && !canDoubleHard1011 && playerHand.length >= 2 && (
+            {gameState === 'playing' && !canDoubleFirstTwo && playerHand.length >= 2 && (
               <div className="mt-3 text-center text-xs text-white/60">
-                Double is available only on a hard 10 or 11 on the first two cards
+                {dblHint}
               </div>
             )}
           </div>
 
           <div className="lg:col-span-1">
-            <StatsPanel stats={stats} mode={mode} />
+            <StatsPanel stats={stats} mode={String(candidateMode)} />
             <div className="mt-6 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
               <h3 className="text-white font-semibold mb-3 flex items-center">
                 <AlertCircle className="w-5 h-5 mr-2" />
@@ -622,6 +703,103 @@ export default function GameTable({ mode = 'perfect', onBack }) {
           </div>
         </div>
       </div>
+
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowSettings(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Edit rules</h3>
+
+            <div className="space-y-3 text-sm text-gray-700">
+              <div>
+                <label className="block mb-1">Hole card</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  value={localSettings.hole_mode}
+                  onChange={(e)=>setLocalSettings(s=>({ ...s, hole_mode: e.target.value }))}
+                >
+                  <option value="perfect">perfect</option>
+                  <option value="4to10">4to10</option>
+                  <option value="2to3">2to3</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Grader uses 4 to 10 or 2 to 3 buckets</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1">Surrender</label>
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    value={localSettings.surrender_allowed ? 'Yes' : 'No'}
+                    onChange={(e)=>setLocalSettings(s=>({ ...s, surrender_allowed: e.target.value === 'Yes' }))}
+                  >
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block mb-1">Dealer soft 17</label>
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    value={localSettings.soft17_hit ? 'Hit' : 'Stand'}
+                    onChange={(e)=>setLocalSettings(s=>({ ...s, soft17_hit: e.target.value === 'Hit' }))}
+                  >
+                    <option value="Hit">Hit</option>
+                    <option value="Stand">Stand</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1">Decks</label>
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    value={String(localSettings.decks_count)}
+                    onChange={(e)=>setLocalSettings(s=>({ ...s, decks_count: Number(e.target.value) }))}
+                  >
+                    <option value="1">1</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block mb-1">Double allowed</label>
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    value={localSettings.double_first_two}
+                    onChange={(e)=>setLocalSettings(s=>({ ...s, double_first_two: e.target.value }))}
+                  >
+                    <option value="any">any</option>
+                    <option value="9-11">9-11</option>
+                    <option value="10-11">10-11</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm"
+                onClick={() => setShowSettings(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+                onClick={saveSettings}
+                disabled={saving}
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes shake {

@@ -21,7 +21,7 @@ async function pingNewUserOnce(session) {
       session.access_token ||
       (await supabase.auth.getSession()).data.session?.access_token
 
-    const response = await fetch('/new_user', {
+    const response = await fetch('/api/new_user', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
