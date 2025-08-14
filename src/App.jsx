@@ -573,27 +573,77 @@ function StrategyChartPage({ onBack }) {
 
 /* --------------------------- Blackjack settings UI -------------------------- */
 
-function BlackjackSettings({ onStart, onBack }) {
-  const [holeCard, setHoleCard] = useState('perfect')
-  const [surrenderAllowed, setSurrenderAllowed] = useState('yes')
-  const [soft17Hit, setSoft17Hit] = useState('true')
-  const [decksCount, setDecksCount] = useState('6')
-  const [doubleAllowed, setDoubleAllowed] = useState('any')
+/* --------------------------- Blackjack settings UI -------------------------- */
 
-  const disableDecks = holeCard === 'A to 9'
-  const settings = useMemo(() => ({
-    hole_mode: holeCard === '4-10' ? '4to10' : holeCard === '2-3' ? '2to3' : holeCard === 'A to 9' ? 'Ato9' : 'perfect',
-    surrender_allowed: surrenderAllowed === 'yes',
-    soft17_hit: soft17Hit === 'true',
+function BlackjackSettings({ onStart, onBack }) {
+  const [holeCard, setHoleCard] = useState('perfect')                // "perfect" | "4-10" | "2-3" | "A-9DAS" | "A-9NoDAS"
+  const [surrenderAllowed, setSurrenderAllowed] = useState('Yes')    // "Yes" | "No"
+  const [soft17Setting, setSoft17Setting] = useState('Hit')          // "Hit" | "Stand"
+  const [decksCount, setDecksCount] = useState('6')                  // "1" | "4" | "5" | "6"
+  const [doubleAllowed, setDoubleAllowed] = useState('any')          // "any" | "9-11" | "10-11"
+  const [submitting, setSubmitting] = useState(false)
+
+  const disableDecks = holeCard === 'A-9DAS' || holeCard === 'A-9NoDAS'
+
+  // client settings for GameTable, unchanged shape
+  const clientSettings = useMemo(() => ({
+    hole_mode:
+      holeCard === '4-10' ? '4to10'
+      : holeCard === '2-3' ? '2to3'
+      : (holeCard === 'A-9DAS' || holeCard === 'A-9NoDAS') ? 'Ato9'
+      : 'perfect',
+    surrender_allowed: surrenderAllowed === 'Yes',
+    soft17_hit: soft17Setting === 'Hit',
     decks_count: Number(decksCount),
-    double_first_two: doubleAllowed === 'any' ? 'any' : doubleAllowed,
-  }), [holeCard, surrenderAllowed, soft17Hit, decksCount, doubleAllowed])
+    double_first_two: doubleAllowed, // already "any" | "9-11" | "10-11"
+  }), [holeCard, surrenderAllowed, soft17Setting, decksCount, doubleAllowed])
+
+  // backend payload with exact keys and values
+  const backendPayload = useMemo(() => ({
+    'Hole Card': holeCard,                         // "perfect" | "4-10" | "2-3" | "A-9DAS" | "A-9NoDAS"
+    'Surrender': surrenderAllowed,                 // "Yes" | "No"
+    'Dealer_soft_17': soft17Setting,               // "Hit" | "Stand"
+    'Decks': disableDecks ? 1 : Number(decksCount),// integer 1|4|5|6, force 1 when A-9 selected
+    'Double allowed': doubleAllowed,               // "any" | "9-11" | "10-11"
+  }), [holeCard, surrenderAllowed, soft17Setting, decksCount, doubleAllowed, disableDecks])
+
+  const authFetch = async (path, init = {}) => {
+    const token = await getAccessToken()
+    const headers = new Headers(init.headers || {})
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    headers.set('Content-Type', 'application/json')
+    return fetch(path, { ...init, headers, credentials: 'include' })
+  }
+
+  const submitAndStart = async () => {
+    setSubmitting(true)
+    try {
+      const res = await authFetch('/api/settings_update', {
+        method: 'POST',
+        body: JSON.stringify(backendPayload),
+      })
+      if (!res.ok) {
+        const msg = `Settings update failed, HTTP ${res.status}`
+        console.error(msg)
+        toast.error(msg)
+        return
+      }
+      toast.success('Settings saved')
+      onStart(clientSettings)
+    } catch (e) {
+      console.error(e)
+      toast.error('Could not reach server')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNav title="Settings" onGo={onBack} showBack />
       <main className="px-4 py-4 max-w-md mx-auto">
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+
           <div>
             <label className="block text-sm text-gray-700 mb-1">Hole card</label>
             <select
@@ -601,10 +651,11 @@ function BlackjackSettings({ onStart, onBack }) {
               value={holeCard}
               onChange={(e)=>setHoleCard(e.target.value)}
             >
-              <option>Perfect</option>
-              <option>4-10</option>
-              <option>2-3</option>
-              <option>A to 9</option>
+              <option value="perfect">Perfect</option>
+              <option value="4-10">4-10</option>
+              <option value="2-3">2-3</option>
+              <option value="A-9DAS">A-9 DAS</option>
+              <option value="A-9NoDAS">A-9 NoDAS</option>
             </select>
           </div>
 
@@ -616,8 +667,8 @@ function BlackjackSettings({ onStart, onBack }) {
                 value={surrenderAllowed}
                 onChange={(e)=>setSurrenderAllowed(e.target.value)}
               >
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
               </select>
             </div>
 
@@ -625,11 +676,11 @@ function BlackjackSettings({ onStart, onBack }) {
               <label className="block text-sm text-gray-700 mb-1">Dealer soft 17</label>
               <select
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                value={soft17Hit}
-                onChange={(e)=>setSoft17Hit(e.target.value)}
+                value={soft17Setting}
+                onChange={(e)=>setSoft17Setting(e.target.value)}
               >
-                <option value="true">Hit</option>
-                <option value="false">Stand</option>
+                <option value="Hit">Hit</option>
+                <option value="Stand">Stand</option>
               </select>
             </div>
           </div>
@@ -643,11 +694,12 @@ function BlackjackSettings({ onStart, onBack }) {
                 onChange={(e)=>setDecksCount(e.target.value)}
                 disabled={disableDecks}
               >
+                <option value="1">1</option>
                 <option value="4">4</option>
                 <option value="5">5</option>
                 <option value="6">6</option>
               </select>
-              {disableDecks && <p className="mt-1 text-xs text-gray-500">Disabled when A to 9 is selected</p>}
+              {disableDecks && <p className="mt-1 text-xs text-gray-500">Decks fixed to 1 for A 9 modes</p>}
             </div>
 
             <div>
@@ -657,7 +709,7 @@ function BlackjackSettings({ onStart, onBack }) {
                 value={doubleAllowed}
                 onChange={(e)=>setDoubleAllowed(e.target.value)}
               >
-                <option value="any">Any</option>
+                <option value="any">any</option>
                 <option value="9-11">9-11</option>
                 <option value="10-11">10-11</option>
               </select>
@@ -665,10 +717,11 @@ function BlackjackSettings({ onStart, onBack }) {
           </div>
 
           <button
-            onClick={() => onStart(settings)}
-            className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800"
+            onClick={submitAndStart}
+            disabled={submitting}
+            className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800 disabled:opacity-50"
           >
-            Start Blackjack
+            {submitting ? 'Saving…' : 'Start Blackjack'}
           </button>
         </div>
 
