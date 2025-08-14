@@ -44,23 +44,21 @@ function TopNav({ title = 'Bet404', onGo, showBack = false }) {
             <SettingsIcon size={18} />
           </button>
           <div className="hidden sm:block text-xs text-gray-600">{user?.email}</div>
-<button
-  onClick={async () => {
-    // clear server cookie
-    try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-    } catch (e) {
-      console.warn('logout endpoint failed', e)
-    }
-    // clear Supabase session in the browser
-    await supabase.auth.signOut()
-  }}
-  className="flex items-center space-x-1 text-gray-600"
-  title="Sign out"
->
-  <LogOut size={16} />
-  <span className="text-sm">Sign out</span>
-</button>
+          <button
+            onClick={async () => {
+              try {
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+              } catch (e) {
+                console.warn('logout endpoint failed', e)
+              }
+              await supabase.auth.signOut()
+            }}
+            className="flex items-center space-x-1 text-gray-600"
+            title="Sign out"
+          >
+            <LogOut size={16} />
+            <span className="text-sm">Sign out</span>
+          </button>
         </div>
       </div>
     </header>
@@ -144,7 +142,7 @@ function LoginScreen() {
           <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-semibold text-lg">B</span>
           </div>
-        <h1 className="text-2xl font-medium text-gray-900 mb-2">
+          <h1 className="text-2xl font-medium text-gray-900 mb-2">
             {isSignUp ? 'Create account' : 'Bet404'}
           </h1>
           <p className="text-gray-500 text-sm">
@@ -180,18 +178,18 @@ function LoginScreen() {
             </button>
           </div>
 
-        {!isSignUp && (
-          <div className="flex justify-between text-sm">
-            <span></span>
-            <button
-              type="button"
-              onClick={() => setShowReset(true)}
-              className="text-black hover:underline"
-            >
-              Forgot password?
-            </button>
-          </div>
-        )}
+          {!isSignUp && (
+            <div className="flex justify-between text-sm">
+              <span></span>
+              <button
+                type="button"
+                onClick={() => setShowReset(true)}
+                className="text-black hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -233,9 +231,12 @@ function StrategyChartPage({ onBack }) {
 
   const dealerCards = ['2','3','4','5','6','7','8','9','10','A']
 
+  // added a9das and a9nodas buckets, same structure
   const [charts, setCharts] = React.useState({
-    '4to10': { hard: {} },
-    '2to3': { hard: {} }
+    '4to10':  { hard: {} },
+    '2to3':   { hard: {} },
+    'a9das':  { hard: {} },
+    'a9nodas':{ hard: {} }
   })
 
   const [perfectChart, setPerfectChart] = React.useState({ rows: [] })
@@ -342,6 +343,18 @@ function StrategyChartPage({ onBack }) {
         const data = await res.json()
         const transformed = transformRegularChart(data)
         setCharts(prev => ({ ...prev, ['2to3']: { hard: transformed } }))
+      } else if (bucket === 'a9das') {
+        const res = await authFetch('/api/a9das_chart')
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+        const data = await res.json()
+        const transformed = transformRegularChart(data)
+        setCharts(prev => ({ ...prev, ['a9das']: { hard: transformed } }))
+      } else if (bucket === 'a9nodas') {
+        const res = await authFetch('/api/a9nodas_chart')
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+        const data = await res.json()
+        const transformed = transformRegularChart(data)
+        setCharts(prev => ({ ...prev, ['a9nodas']: { hard: transformed } }))
       } else {
         const res = await authFetch('/api/4to10_chart')
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
@@ -385,6 +398,13 @@ function StrategyChartPage({ onBack }) {
     'RP/H','RH/H','RH/P','RH/PRH'
   ]
 
+  const dealerLabelMap = {
+    '4to10': '4 to 10',
+    '2to3': '2 to 3',
+    'a9das': 'A to 9 DAS',
+    'a9nodas': 'A to 9 NoDAS'
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -419,6 +439,8 @@ function StrategyChartPage({ onBack }) {
             <select value={bucket} onChange={(e)=>setBucket(e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-sm">
               <option value="4to10">4 to 10</option>
               <option value="2to3">2 to 3</option>
+              <option value="a9das">A to 9 DAS</option>
+              <option value="a9nodas">A to 9 NoDAS</option>
               <option value="perfect">Perfect</option>
             </select>
 
@@ -471,7 +493,7 @@ function StrategyChartPage({ onBack }) {
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
               <h2 className="font-medium text-gray-900">Strategy Chart</h2>
-              <p className="text-xs text-gray-500 mt-1">Dealer {bucket === '4to10' ? '4 to 10' : '2 to 3'}</p>
+              <p className="text-xs text-gray-500 mt-1">Dealer {dealerLabelMap[bucket] || ''}</p>
             </div>
 
             <div className="overflow-x-auto">
@@ -583,16 +605,16 @@ function BlackjackSettings({ onStart, onBack }) {
     surrender_allowed: surrenderAllowed === 'Yes',
     soft17_hit: soft17Setting === 'Hit',
     decks_count: Number(decksCount),
-    double_first_two: doubleAllowed, // already "any" | "9-11" | "10-11"
+    double_first_two: doubleAllowed,
   }), [holeCard, surrenderAllowed, soft17Setting, decksCount, doubleAllowed])
 
   // backend payload with exact keys and values
   const backendPayload = useMemo(() => ({
-    'Hole Card': holeCard,                         // "perfect" | "4-10" | "2-3" | "A-9DAS" | "A-9NoDAS"
-    'Surrender': surrenderAllowed,                 // "Yes" | "No"
-    'Dealer_soft_17': soft17Setting,               // "Hit" | "Stand"
-    'Decks': disableDecks ? 1 : Number(decksCount),// integer 1|4|5|6, force 1 when A-9 selected
-    'Double allowed': doubleAllowed,               // "any" | "9-11" | "10-11"
+    'Hole Card': holeCard,
+    'Surrender': surrenderAllowed,
+    'Dealer_soft_17': soft17Setting,
+    'Decks': disableDecks ? 1 : Number(decksCount),
+    'Double allowed': doubleAllowed,
   }), [holeCard, surrenderAllowed, soft17Setting, decksCount, doubleAllowed, disableDecks])
 
   const authFetch = async (path, init = {}) => {
@@ -1220,21 +1242,21 @@ function Dashboard() {
   const [pendingSettings, setPendingSettings] = useState(null)
   const [activeGame, setActiveGame] = useState(null)
 
-React.useEffect(() => {
-  const isSpanish21 = route === 'play' && activeGame?.game === 'spanish21';
+  React.useEffect(() => {
+    const isSpanish21 = route === 'play' && activeGame?.game === 'spanish21';
 
-  if (isSpanish21) {
-    document.body.style.backgroundColor = '#8B0000';
-    document.documentElement.style.backgroundColor = '#8B0000';
-  } else {
-    document.body.style.backgroundColor = '#006400';
-    document.documentElement.style.backgroundColor = '#006400';
-  }
-  return () => {
-    document.body.style.backgroundColor = '';
-    document.documentElement.style.backgroundColor = '';
-  };
-}, [route, activeGame?.game]);
+    if (isSpanish21) {
+      document.body.style.backgroundColor = '#8B0000';
+      document.documentElement.style.backgroundColor = '#8B0000';
+    } else {
+      document.body.style.backgroundColor = '#006400';
+      document.documentElement.style.backgroundColor = '#006400';
+    }
+    return () => {
+      document.body.style.backgroundColor = '';
+      document.documentElement.style.backgroundColor = '';
+    };
+  }, [route, activeGame?.game]);
 
   const go = (next) => setRoute(next)
 
@@ -1285,15 +1307,14 @@ React.useEffect(() => {
         )}
 
         <div className={isSpanish21 ? 's21-scope' : 'bg-green-700'}>
-<GameTable
-  mode={activeGame.mode}
-  settings={pendingSettings}
-  onSettingsChange={(next) => setPendingSettings(next)} // <-- only new line
-  onBack={() => { setActiveGame(null); setRoute('home'); }}
-  uiTheme={isSpanish21 ? 'casino-red' : 'default'}
-/> 
-
-</div>
+          <GameTable
+            mode={activeGame.mode}
+            settings={pendingSettings}
+            onSettingsChange={(next) => setPendingSettings(next)}
+            onBack={() => { setActiveGame(null); setRoute('home'); }}
+            uiTheme={isSpanish21 ? 'casino-red' : 'default'}
+          />
+        </div>
       </div>
     );
   }
