@@ -76,6 +76,18 @@ const holeModeClasses = (mode) => {
   }
 }
 
+// NEW: badge label helper
+const holeBadgeText = (mode) => {
+  const s = String(mode || '').trim().toUpperCase()
+  if (s.includes('4-10')) return '4–10'
+  if (s.includes('2-3')) return '2–3'
+  if (s.includes('A-9DAS')) return 'A–9 DAS'
+  if (s.includes('A-9NODAS')) return 'A–9 NoDAS'
+  if (s === 'A-9' || s.includes('A-9')) return 'A–9'
+  if (s === 'PERFECT') return 'Perfect'
+  return 'Hole'
+}
+
 const Card = ({ value, suit, hidden = false, highlight = false, mini = false, mode = 'perfect' }) => {
   const getSuitIcon = () => {
     switch(suit) {
@@ -108,8 +120,12 @@ const Card = ({ value, suit, hidden = false, highlight = false, mini = false, mo
         <div className={`absolute top-1 right-1 ${cls.badge} rounded-full p-1`}>
           <Eye className="w-3 h-3 text-white" />
         </div>
-        <div className={`absolute bottom-1 left-1 ${cls.badge} text-white text-[7px] font-bold px-1 rounded`}>
-          HOLE
+        {/* CHANGED: shows mode label instead of static "HOLE" */}
+        <div
+          className={`absolute bottom-1 left-1 ${cls.badge} text-white text-[9px] leading-none font-bold px-1.5 py-0.5 rounded`}
+          title="Hole-card mode"
+        >
+          {holeBadgeText(mode)}
         </div>
       </div>
     )
