@@ -40,8 +40,8 @@ def create_app():
     app.register_blueprint(charts_bp, url_prefix='/api')
     app.register_blueprint(grading_bp, url_prefix='/api')
     app.register_blueprint(settings_bp, url_prefix='/api')
-    app.register_blueprint(new_user_bp, prefix='/api')
-    app.register_blueprint(stats_bp, prefix='/api')
+    app.register_blueprint(new_user_bp, url_prefix='/api')
+    app.register_blueprint(stats_bp, url_prefix='/api')
     return app
 
 if __name__ == '__main__':
