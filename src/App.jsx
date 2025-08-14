@@ -829,18 +829,298 @@ function Spanish21Settings({ onStart, onBack }) {
 
 /* ---------------------------- Simple info pages ---------------------------- */
 
+/* ------------------------------- Stats page ------------------------------- */
+
+function StatCard({ icon: Icon, label, value, sub }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-500">{label}</div>
+        {Icon ? <Icon size={16} className="text-gray-400" /> : null}
+      </div>
+      <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
+      {sub ? <div className="mt-1 text-xs text-gray-500">{sub}</div> : null}
+    </div>
+  )
+}
+
+function ProgressBar({ pct }) {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0))
+  return (
+    <div className="h-2 w-full overflow-hidden rounded bg-gray-200">
+      <div
+        className="h-full rounded bg-green-600 transition-[width]"
+        style={{ width: `${clamped}%` }}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={clamped}
+        aria-label="accuracy"
+      />
+    </div>
+  )
+}
+
+function TinyBars({ correct = 0, errors = 0 }) {
+  const total = Math.max(1, correct + errors)
+  const cw = Math.round((correct / total) * 100)
+  const ew = 100 - cw
+  return (
+    <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-gray-200">
+      <div className="h-full bg-green-600" style={{ width: `${cw}%` }} />
+      <div className="h-full bg-red-400" style={{ width: `${ew}%` }} />
+    </div>
+  )
+}
+
+function ModeCard({ name, data }) {
+  const total = data?.total ?? 0
+  const correct = data?.correct ?? 0
+  const errors = data?.errors ?? 0
+  const accuracy = data?.accuracy ?? (total ? Math.round((correct / total) * 1000) / 10 : 0)
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 hover:shadow-sm transition-shadow">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-gray-900">{name}</div>
+        <div className="text-xs text-gray-500">{total} hands</div>
+      </div>
+      <div className="mt-2">
+        <ProgressBar pct={accuracy} />
+        <div className="mt-1 flex justify-between text-xs text-gray-600">
+          <span>Accuracy {accuracy}%</span>
+          <span>Correct {correct}, Errors {errors}</span>
+        </div>
+        <TinyBars correct={correct} errors={errors} />
+      </div>
+    </div>
+  )
+}
+
+function SkeletonCard() {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 animate-pulse">
+      <div className="h-3 w-20 rounded bg-gray-200" />
+      <div className="mt-2 h-7 w-24 rounded bg-gray-200" />
+      <div className="mt-2 h-3 w-32 rounded bg-gray-200" />
+    </div>
+  )
+}
+
+function useStats() {
+  const [data, setData] = React.useState(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState(null)
+
+  const authFetch = async (path, init = {}) => {
+    const token = await getAccessToken()
+    const headers = new Headers(init.headers || {})
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    return fetch(path, { ...init, headers, credentials: 'include' })
+  }
+
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await authFetch('/api/stats')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setData(json)
+    } catch (e) {
+      setError(e.message || 'Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => { load() }, [load])
+  return { data, loading, error, reload: load }
+}
+
+function computeOverview(perMode) {
+  const modes = perMode || {}
+  let total = 0, correct = 0, errors = 0
+  Object.values(modes).forEach(m => {
+    total += m?.total ?? 0
+    correct += m?.correct ?? 0
+    errors += m?.errors ?? 0
+  })
+  const accuracy = total ? Math.round((correct / total) * 1000) / 10 : 0
+  return { total, correct, errors, accuracy }
+}
+
+function Section({ title, right }) {
+  return (
+    <div className="mb-2 flex items-center justify-between">
+      <h3 className="text-sm font-medium text-gray-900">{title}</h3>
+      {right || null}
+    </div>
+  )
+}
+
+function EmptyRecent() {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
+      No recent mistakes to show.
+    </div>
+  )
+}
+
+function RecentList({ items }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white">
+      <div className="divide-y divide-gray-200">
+        {items.slice(0, 10).map((r, i) => (
+          <div key={i} className="px-4 py-3 text-xs sm:text-sm">
+            <div className="flex items-center justify-between">
+              <div className="font-medium text-gray-900">
+                Hand {r?.player_hand ?? '?'} , Dealer {r?.dealer_card ?? '?'}
+              </div>
+              <div className="text-gray-500">{r?.ts ? new Date(r.ts).toLocaleString() : ''}</div>
+            </div>
+            <div className="mt-1 text-gray-700">
+              You picked <span className="font-semibold">{r?.chosen ?? '?'}</span> , best was <span className="font-semibold">{r?.best ?? '?'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function StatsPage({ onBack }) {
+  const { data, loading, error, reload } = useStats()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNav title="Stats" onGo={onBack} showBack />
+        <main className="mx-auto max-w-6xl px-4 py-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <SkeletonCard /><SkeletonCard /><SkeletonCard />
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <TopNav title="Stats" onGo={onBack} showBack />
+        <main className="mx-auto max-w-md px-4 py-4">
+          <div className="rounded-xl border border-red-200 bg-white p-4 text-center">
+            <p className="text-sm text-red-600">Could not load stats, {error}</p>
+            <button
+              onClick={reload}
+              className="mt-3 rounded bg-black px-4 py-2 text-sm text-white"
+            >
+              Retry
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  const perMode = data?.per_mode || {}
+  const overview = computeOverview(perMode)
+  const streak = data?.current_streak ?? 0
+  const recent = Array.isArray(data?.recent) ? data.recent : []
+
+  const orderedModes = [
+    ['perfect', perMode['perfect']],
+    ['4-10', perMode['4-10']],
+    ['2-3', perMode['2-3']],
+    ['A-9DAS', perMode['A-9DAS']],
+    ['A-9NoDAS', perMode['A-9NoDAS']],
+  ].filter(([, d]) => d)
+
+  const extraModes = Object.entries(perMode)
+    .filter(([k]) => !orderedModes.map(([n]) => n).includes(k))
+
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNav title="Stats" onGo={onBack} showBack />
-      <main className="px-4 py-4 max-w-md mx-auto">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h2 className="text-base font-semibold text-gray-900 mb-2">Overview</h2>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-600">Hands</span><span className="font-medium">0</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">Accuracy</span><span className="font-medium">0%</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">Streak</span><span className="font-medium">0</span></div>
-          </div>
+      <main className="mx-auto w-full max-w-6xl px-4 py-4">
+        {/* Top summary, responsive grid */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <StatCard label="Hands" value={overview.total} />
+          <StatCard label="Accuracy" value={`${overview.accuracy}%`} sub={`${overview.correct} correct`} />
+          <StatCard label="Errors" value={overview.errors} />
+          <StatCard label="Streak" value={streak} />
+        </div>
+
+        {/* Two column layout on large screens */}
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* Left column */}
+          <section className="lg:col-span-2 space-y-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <Section
+                title="Overall accuracy"
+                right={<span className="text-xs text-gray-500">{overview.accuracy}%</span>}
+              />
+              <ProgressBar pct={overview.accuracy} />
+            </div>
+
+            <div>
+              <Section title="By mode" />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {orderedModes.map(([name, d]) => (
+                  <ModeCard key={name} name={name} data={d} />
+                ))}
+                {extraModes.map(([k, d]) => (
+                  <ModeCard key={k} name={k} data={d} />
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Right column */}
+          <section className="space-y-4">
+            <Section
+              title="Recent mistakes"
+              right={
+                <button
+                  onClick={reload}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                >
+                  Refresh
+                </button>
+              }
+            />
+            {recent.length > 0 ? <RecentList items={recent} /> : <EmptyRecent />}
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="text-sm font-medium text-gray-900">Tips</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-gray-600">
+                <li>Work through weaker modes first.</li>
+                <li>Review doubles where errors appear most often.</li>
+                <li>Keep short sessions, focus on accuracy, then speed.</li>
+              </ul>
+            </div>
+          </section>
+        </div>
+
+        {/* Bottom actions */}
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <button
+            onClick={reload}
+            className="flex-1 rounded-lg border border-gray-200 bg-white py-3 text-sm"
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => onBack('home')}
+            className="flex-1 rounded-lg bg-black py-3 text-sm text-white"
+          >
+            Home
+          </button>
         </div>
       </main>
     </div>
