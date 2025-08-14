@@ -223,8 +223,8 @@ function LoginScreen() {
 }
 
 /* ------------------------- Strategy chart page (lite) ------------------------- */
+/* ------------------------- Strategy chart page (lite) ------------------------- */
 function StrategyChartPage({ onBack }) {
-  const [rule, setRule] = React.useState('H17')
   const [bucket, setBucket] = React.useState('4to10')
   const [editable, setEditable] = React.useState(true)
   const [loading, setLoading] = React.useState(true)
@@ -234,11 +234,11 @@ function StrategyChartPage({ onBack }) {
   const dealerCards = ['2','3','4','5','6','7','8','9','10','A']
 
   const [charts, setCharts] = React.useState({
-    H17: { '4to10': { hard: {} }, '2to3': { hard: {} } },
-    S17: { '4to10': { hard: {} }, '2to3': { hard: {} } }
+    '4to10': { hard: {} },
+    '2to3': { hard: {} }
   })
 
-  const [perfectChart, setPerfectChart] = React.useState({ rule: 'H17', rows: [] })
+  const [perfectChart, setPerfectChart] = React.useState({ rows: [] })
 
   // authenticated fetch helper, attaches Supabase token and sends cookies
   const authFetch = async (path, init = {}) => {
@@ -331,27 +331,23 @@ function StrategyChartPage({ onBack }) {
       setLoading(true); setError(null)
 
       if (bucket === 'perfect') {
-        const res = await authFetch(`/api/perfect_chart?rule=${encodeURIComponent(rule)}`)
+        const res = await authFetch(`/api/perfect_chart`)
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
         const data = await res.json()
-        console.log('[perfect_chart] raw', data)
         const rows = transformPerfectChart(data)
-        console.log('[perfect_chart] rows', rows)
-        setPerfectChart({ rule, rows })
+        setPerfectChart({ rows })
       } else if (bucket === '2to3') {
         const res = await authFetch('/api/2to3_chart')
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
         const data = await res.json()
-        console.log('[2to3_chart] raw', data)
         const transformed = transformRegularChart(data)
-        setCharts(prev => ({ ...prev, [rule]: { ...(prev[rule] || {}), ['2to3']: { hard: transformed } } }))
+        setCharts(prev => ({ ...prev, ['2to3']: { hard: transformed } }))
       } else {
         const res = await authFetch('/api/4to10_chart')
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
         const data = await res.json()
-        console.log('[4to10_chart] raw', data)
         const transformed = transformRegularChart(data)
-        setCharts(prev => ({ ...prev, [rule]: { ...(prev[rule] || {}), ['4to10']: { hard: transformed } } }))
+        setCharts(prev => ({ ...prev, ['4to10']: { hard: transformed } }))
       }
     } catch (err) {
       console.error('Error fetching chart data:', err)
@@ -361,19 +357,18 @@ function StrategyChartPage({ onBack }) {
     }
   }
 
-  React.useEffect(() => { fetchChartData() }, [bucket, rule])
+  React.useEffect(() => { fetchChartData() }, [bucket])
 
-  const table = charts[rule]?.[bucket]?.hard || {}
+  const table = charts[bucket]?.hard || {}
 
   const setCell = (rowLabel, colIndex, value) => {
     if (bucket !== '2to3') return
     setCharts(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      if (!next[rule]) next[rule] = {}
-      if (!next[rule][bucket]) next[rule][bucket] = {}
-      if (!next[rule][bucket].hard) next[rule][bucket].hard = {}
-      if (!next[rule][bucket].hard[rowLabel]) next[rule][bucket].hard[rowLabel] = new Array(10).fill('H')
-      next[rule][bucket].hard[rowLabel][colIndex] = String(value).toUpperCase()
+      if (!next[bucket]) next[bucket] = {}
+      if (!next[bucket].hard) next[bucket].hard = {}
+      if (!next[bucket].hard[rowLabel]) next[bucket].hard[rowLabel] = new Array(10).fill('H')
+      next[bucket].hard[rowLabel][colIndex] = String(value).toUpperCase()
       return next
     })
   }
@@ -420,13 +415,7 @@ function StrategyChartPage({ onBack }) {
       <main className="px-2 py-4">
         <div className="grid grid-cols-1 gap-2 mb-4">
           <div className="bg-white rounded-lg border border-gray-200 p-2 flex items-center space-x-2">
-            <label className="text-sm text-gray-700">Rule</label>
-            <select value={rule} onChange={(e)=>setRule(e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-sm">
-              <option value="H17">H17</option>
-              <option value="S17">S17</option>
-            </select>
-
-            <label className="text-sm text-gray-700 ml-2">Chart</label>
+            <label className="text-sm text-gray-700">Chart</label>
             <select value={bucket} onChange={(e)=>setBucket(e.target.value)} className="border border-gray-200 rounded px-2 py-1 text-sm">
               <option value="4to10">4 to 10</option>
               <option value="2to3">2 to 3</option>
@@ -467,10 +456,9 @@ function StrategyChartPage({ onBack }) {
                 <div className="mt-2">
                   <div className="font-medium">Syntax</div>
                   <ul className="list-disc ml-5 space-y-1">
-                    <li><span className="font-mono">X/Y</span>, X is best at H17 tables, Y is best at S17 tables</li>
                     <li><span className="font-mono">XY</span>, X is best, if X is not allowed then Y is best</li>
                     <li className="text-gray-600">Examples</li>
-                    <li><span className="font-mono">RP/H</span>, at H17 tables Surrender if possible, if not Split, at S17 tables Hit</li>
+                    <li><span className="font-mono">RP/H</span>, Surrender if possible, if not Split, otherwise Hit</li>
                     <li><span className="font-mono">D/S</span> is different from <span className="font-mono">DS</span>, <span className="font-mono">R/P</span> is different from <span className="font-mono">RP</span></li>
                   </ul>
                 </div>
@@ -483,7 +471,7 @@ function StrategyChartPage({ onBack }) {
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
               <h2 className="font-medium text-gray-900">Strategy Chart</h2>
-              <p className="text-xs text-gray-500 mt-1">{rule}, dealer {bucket === '4to10' ? '4 to 10' : '2 to 3'}</p>
+              <p className="text-xs text-gray-500 mt-1">Dealer {bucket === '4to10' ? '4 to 10' : '2 to 3'}</p>
             </div>
 
             <div className="overflow-x-auto">
@@ -507,7 +495,7 @@ function StrategyChartPage({ onBack }) {
                               onChange={(e) => setCell(playerHandLabel, index, e.target.value)}
                               className={`w-full text-xs rounded px-1 py-1 ${getActionColor(action)}`}
                             >
-                              {['H','S','D','P','R','DS','D/S','RH','R/H','RS','R/S','RP','R/P','RP/H','RH/H','RH/P','RH/PRH'].map(opt => (
+                              {allActionOptions.map(opt => (
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
                             </select>
@@ -526,7 +514,7 @@ function StrategyChartPage({ onBack }) {
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
               <h2 className="font-medium text-gray-900">Perfect Chart</h2>
-              <p className="text-xs text-gray-500 mt-1">{rule}, rows are dealer values twenty to six, then A6 to AA</p>
+              <p className="text-xs text-gray-500 mt-1">Rows are dealer values twenty to six, then A6 to AA</p>
             </div>
 
             {perfectChart.rows.length === 0 ? (
