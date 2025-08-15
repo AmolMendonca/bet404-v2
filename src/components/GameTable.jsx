@@ -59,7 +59,7 @@ const holeModeClasses = (mode) => {
       badge: 'bg-amber-500'
     }
   }
-  if (m === 'A-9DAS' || m === 'A-9NoDAS' || m === 'Ato9') {
+  if (m === 'A-9DAS' || m === 'A-9NoDAS' || m === 'Ato9DAS' || m === 'Ato9NoDAS') {
     return {
       border: 'border-emerald-400',
       ring: 'ring-4 ring-emerald-200',
@@ -82,9 +82,8 @@ const holeBadgeText = (mode) => {
   if (s.includes('4TO9')) return '4–9'
   if (s.includes('4-10') || s.includes('4TO10')) return '4–10'
   if (s.includes('2-3') || s.includes('2TO3')) return '2–3'
-  if (s.includes('A-9DAS') || s.includes('Ato9DAS')) return 'A–9 DAS'
-  if (s.includes('A-9NODAS')) return 'A–9 NoDAS'
-  if (s === 'A-9' || s.includes('A-9')) return 'A–9'
+  if (s.includes('A-9DAS') || s.includes('ATO9DAS')) return 'A–9 DAS'
+  if (s.includes('A-9NODAS') || s.includes('ATO9NODAS')) return 'A–9 NoDAS'
   if (s === 'PERFECT') return 'Perfect'
   return 'Hole'
 }
@@ -240,8 +239,9 @@ const canonicalHoleMode = (m) => {
   if (/4\s*[-_ ]?\s*10/i.test(s) || /^4to10$/i.test(s)) return '4-10'
   if (/4\s*[-_ ]?\s*9/i.test(s) || /^4to9$/i.test(s)) return '4to9'
   if (/2\s*[-_ ]?\s*3/i.test(s) || /^2to3$/i.test(s)) return '2-3'
+  if (/^Ato9DAS$/i.test(s) || /^A-?9DAS$/i.test(s)) return 'A-9DAS'
+  if (/^Ato9NoDAS$/i.test(s) || /^A-?9NoDAS$/i.test(s)) return 'A-9NoDAS'
   if (/perfect/i.test(s)) return 'perfect'
-  if (/A-?9/i.test(s)) return 'A-9'
   return s
 }
 
@@ -253,8 +253,7 @@ const resolveHoleModeForGrader = (holeCardChoice) => {
   return '4-10' // fallback
 }
 
-// client settings hole_mode from backend choice
-// replace your current function
+// client settings hole_mode from backend choice → to CLIENT values
 const clientHoleModeFromChoice = (choice) => {
   const c = String(choice || '').trim()
   // Spanish 21
@@ -279,7 +278,7 @@ const choiceFromClientHoleMode = (hm, isSpanish = false) => {
     return 'Spanish_perfect'
   }
   if (h === '4to10') return '4-10'
-  if (h === '2to3') return '2-3'
+  if (h === '2to3')  return '2-3'
   if (h === 'Ato9DAS') return 'A-9DAS'
   if (h === 'Ato9NoDAS') return 'A-9NoDAS'
   if (h === 'perfect') return 'perfect'
@@ -572,7 +571,9 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     setSaving(true)
     try {
       // build backend payload with exact keys and allowed values
-      const decksToSend = isSpanish21 ? 6 : ((holeCardChoice === 'Ato9') ? 1 : (Number(decksCount) || 6))
+      const decksToSend =
+        isSpanish21 ? 6
+        : (String(holeCardChoice).startsWith('Ato9') ? 1 : (Number(decksCount) || 6))
 
       const payload = {
         'Hole Card': choiceFromClientHoleMode(holeCardChoice, isSpanish21),
@@ -593,7 +594,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
 
       // update our local client settings mirror
       const nextLocal = {
-        hole_mode: holeCardChoice, // already client form like perfect, 4to10, 4to9, 2to3, Ato9
+        hole_mode: holeCardChoice, // client form: perfect, 4to10, 4to9, 2to3, Ato9DAS, Ato9NoDAS
         surrender_allowed: surrenderAllowed,
         soft17_hit: soft17Hit,
         decks_count: decksToSend,
@@ -613,7 +614,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     }
   }
 
-  const disableDecks = isSpanish21 || holeCardChoice === 'Ato9'
+  const disableDecks = isSpanish21 || String(holeCardChoice).startsWith('Ato9')
 
   // Dynamic background classes based on game type
   const getBackgroundClasses = () => {
@@ -629,7 +630,8 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     if (s === '4to9') return '4 to 9'
     if (s === '4-10') return '4 to 10'
     if (s === '2-3') return '2 to 3'
-    if (s === 'A-9') return 'A to 9'
+    if (s === 'A-9DAS') return 'A to 9 DAS'
+    if (s === 'A-9NoDAS') return 'A to 9 NoDAS'
     return 'Perfect'
   }
 
@@ -777,7 +779,6 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                     onClick={onDouble}
                     disabled={submitting || countdownActive || !canDoubleFirstTwo}
                     variant="warning"
-                    
                   >
                     Double
                   </ActionButton>
@@ -845,7 +846,8 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                     <option value="perfect">Perfect</option>
                     <option value="4to10">4 to 10</option>
                     <option value="2to3">2 to 3</option>
-                    <option value="Ato9">A to 9 DAS</option>
+                    <option value="Ato9DAS">A to 9 DAS</option>
+                    <option value="Ato9NoDAS">A to 9 NoDAS</option>
                   </select>
                 )}
                 <p className="mt-1 text-xs text-gray-500">Grader uses 4 to 10 or 2 to 3 when needed</p>
