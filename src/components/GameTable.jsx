@@ -43,7 +43,7 @@ const authFetch = async (path, init = {}) => {
 // style helpers for hidden dealer card by hole card mode
 const holeModeClasses = (mode) => {
   const m = String(mode || '').trim()
-  if (m === '4-10') {
+  if (m === '4-10' || m === '4to10' || m === '4to9') {
     return {
       border: 'border-blue-400',
       ring: 'ring-4 ring-blue-200',
@@ -51,7 +51,7 @@ const holeModeClasses = (mode) => {
       badge: 'bg-blue-500'
     }
   }
-  if (m === '2-3') {
+  if (m === '2-3' || m === '2to3') {
     return {
       border: 'border-amber-400',
       ring: 'ring-4 ring-amber-200',
@@ -59,7 +59,7 @@ const holeModeClasses = (mode) => {
       badge: 'bg-amber-500'
     }
   }
-  if (m === 'A-9DAS' || m === 'A-9NoDAS') {
+  if (m === 'A-9DAS' || m === 'A-9NoDAS' || m === 'Ato9') {
     return {
       border: 'border-emerald-400',
       ring: 'ring-4 ring-emerald-200',
@@ -79,9 +79,10 @@ const holeModeClasses = (mode) => {
 // NEW: badge label helper
 const holeBadgeText = (mode) => {
   const s = String(mode || '').trim().toUpperCase()
-  if (s.includes('4-10')) return '4–10'
-  if (s.includes('2-3')) return '2–3'
-  if (s.includes('A-9DAS')) return 'A–9 DAS'
+  if (s.includes('4TO9')) return '4–9'
+  if (s.includes('4-10') || s.includes('4TO10')) return '4–10'
+  if (s.includes('2-3') || s.includes('2TO3')) return '2–3'
+  if (s.includes('A-9DAS') || s.includes('Ato9DAS')) return 'A–9 DAS'
   if (s.includes('A-9NODAS')) return 'A–9 NoDAS'
   if (s === 'A-9' || s.includes('A-9')) return 'A–9'
   if (s === 'PERFECT') return 'Perfect'
@@ -120,7 +121,6 @@ const Card = ({ value, suit, hidden = false, highlight = false, mini = false, mo
         <div className={`absolute top-1 right-1 ${cls.badge} rounded-full p-1`}>
           <Eye className="w-3 h-3 text-white" />
         </div>
-        {/* CHANGED: shows mode label instead of static "HOLE" */}
         <div
           className={`absolute bottom-1 left-1 ${cls.badge} text-white text-[9px] leading-none font-bold px-1.5 py-0.5 rounded`}
           title="Hole-card mode"
@@ -237,8 +237,9 @@ const labelForLetter = (l) => {
 // mapping helpers
 const canonicalHoleMode = (m) => {
   const s = String(m || '').trim()
-  if (/4\s*[-_ ]?\s*10/i.test(s)) return '4-10'
-  if (/2\s*[-_ ]?\s*3/i.test(s)) return '2-3'
+  if (/4\s*[-_ ]?\s*10/i.test(s) || /^4to10$/i.test(s)) return '4-10'
+  if (/4\s*[-_ ]?\s*9/i.test(s) || /^4to9$/i.test(s)) return '4to9'
+  if (/2\s*[-_ ]?\s*3/i.test(s) || /^2to3$/i.test(s)) return '2-3'
   if (/perfect/i.test(s)) return 'perfect'
   if (/A-?9/i.test(s)) return 'A-9'
   return s
@@ -247,25 +248,40 @@ const canonicalHoleMode = (m) => {
 const supportedHoleModesForGrader = ['4-10', '2-3']
 const resolveHoleModeForGrader = (holeCardChoice) => {
   const s = canonicalHoleMode(holeCardChoice)
+  if (s === '4to9') return '4-10' // grader fallback
   if (supportedHoleModesForGrader.includes(s)) return s
-  return '4-10' // fallback for perfect and A-9 variants
+  return '4-10' // fallback
 }
 
 // client settings hole_mode from backend choice
 const clientHoleModeFromChoice = (choice) => {
-  if (choice === '4-10') return '4to10'
-  if (choice === '2-3') return '2to3'
-  if (choice === 'perfect') return 'perfect'
-  if (choice === 'A-9DAS' || choice === 'A-9NoDAS') return 'Ato9'
+  const c = String(choice || '').trim()
+  // Spanish 21
+  if (c === 'Spanish_perfect') return 'perfect'
+  if (c === 'Spanish_4to9') return '4to9'
+  if (c === 'Spanish_2to3') return '2to3'
+  // Blackjack
+  if (c === '4-10') return '4to10'
+  if (c === '2-3') return '2to3'
+  if (c === 'perfect') return 'perfect'
+  if (c === 'A-9DAS' || c === 'A-9NoDAS') return 'Ato9'
   return 'perfect'
 }
 
 // backend choice string from client hole_mode
-const choiceFromClientHoleMode = (hm) => {
-  if (hm === '4to10') return '4-10'
-  if (hm === '2to3') return '2-3'
-  if (hm === 'perfect') return 'perfect'
-  if (hm === 'Ato9') return 'A-9DAS'
+const choiceFromClientHoleMode = (hm, isSpanish = false) => {
+  const h = String(hm || '').trim()
+  if (isSpanish) {
+    if (h === 'perfect') return 'Spanish_perfect'
+    if (h === '4to9') return 'Spanish_4to9'
+    if (h === '2to3') return 'Spanish_2to3'
+    // default
+    return 'Spanish_perfect'
+  }
+  if (h === '4to10') return '4-10'
+  if (h === '2to3') return '2-3'
+  if (h === 'perfect') return 'perfect'
+  if (h === 'Ato9') return 'A-9DAS'
   return 'perfect'
 }
 
@@ -296,19 +312,19 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
   const [showSettings, setShowSettings] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Determine if this is Spanish 21 based on settings
+  const isSpanish21 = settings?.game_type === 'spanish21'
+
   // local editable settings mirror
-  const [holeCardChoice, setHoleCardChoice] = useState(() => choiceFromClientHoleMode(settings?.hole_mode || clientHoleModeFromChoice(mode)))
+  const [holeCardChoice, setHoleCardChoice] = useState(() => clientHoleModeFromChoice(settings?.hole_mode || mode))
   const [surrenderAllowed, setSurrenderAllowed] = useState(!!settings?.surrender_allowed)
   const [soft17Hit, setSoft17Hit] = useState(!!settings?.soft17_hit)
   const [decksCount, setDecksCount] = useState(Number.isFinite(settings?.decks_count) ? settings.decks_count : 6)
   const [doubleAllowed, setDoubleAllowed] = useState(settings?.double_first_two || '10-11')
 
-  // Determine if this is Spanish 21 based on settings
-  const isSpanish21 = settings?.game_type === 'spanish21'
-
   useEffect(() => {
     // sync with parent settings if they change
-    setHoleCardChoice(choiceFromClientHoleMode(settings?.hole_mode || clientHoleModeFromChoice(mode)))
+    setHoleCardChoice(clientHoleModeFromChoice(settings?.hole_mode || mode))
     setSurrenderAllowed(!!settings?.surrender_allowed)
     setSoft17Hit(!!settings?.soft17_hit)
     setDecksCount(Number.isFinite(settings?.decks_count) ? settings.decks_count : 6)
@@ -457,7 +473,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     setSubmitting(true);
     try {
       const payload = {
-        hole_mode: resolvedForGrader, // '4-10' or '2-3'
+        hole_mode: resolvedForGrader, // '4-10' or '2-3' for grader
         player_cards: (initialDeal.player_cards || []).map(c => ({
           rank: rankForBackend(c.value),
           suit: c.suit
@@ -555,14 +571,14 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     setSaving(true)
     try {
       // build backend payload with exact keys and allowed values
-      const decksToSend = (holeCardChoice === 'A-9DAS' || holeCardChoice === 'A-9NoDAS') ? 1 : Number(decksCount) || 6
+      const decksToSend = isSpanish21 ? 6 : ((holeCardChoice === 'Ato9') ? 1 : (Number(decksCount) || 6))
 
       const payload = {
-        'Hole Card': holeCardChoice, // "perfect" | "4-10" | "2-3" | "A-9DAS" | "A-9NoDAS"
+        'Hole Card': choiceFromClientHoleMode(holeCardChoice, isSpanish21),
         'Surrender': surrenderAllowed ? 'Yes' : 'No',
         'Dealer_soft_17': soft17Hit ? 'Hit' : 'Stand',
-        'Decks': decksToSend, // 1 | 4 | 5 | 6
-        'Double allowed': doubleAllowed // "any" | "9-11" | "10-11"
+        'Decks': decksToSend,
+        'Double allowed': doubleAllowed
       }
 
       const res = await authFetch(settingsEndpoint, {
@@ -576,14 +592,15 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
 
       // update our local client settings mirror
       const nextLocal = {
-        hole_mode: clientHoleModeFromChoice(holeCardChoice),
+        hole_mode: holeCardChoice, // already client form like perfect, 4to10, 4to9, 2to3, Ato9
         surrender_allowed: surrenderAllowed,
         soft17_hit: soft17Hit,
         decks_count: decksToSend,
-        double_first_two: doubleAllowed
+        double_first_two: doubleAllowed,
+        game_type: isSpanish21 ? 'spanish21' : 'blackjack'
       }
 
-      // notify parent if provided
+      // notify parent so table refreshes with correct rules
       onSettingsChange?.(nextLocal)
 
       setShowSettings(false)
@@ -595,14 +612,24 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     }
   }
 
-  const disableDecks = holeCardChoice === 'A-9DAS' || holeCardChoice === 'A-9NoDAS'
+  const disableDecks = isSpanish21 || holeCardChoice === 'Ato9'
 
-  // FIXED: Dynamic background classes based on game type
+  // Dynamic background classes based on game type
   const getBackgroundClasses = () => {
     if (isSpanish21) {
       return 'bg-gradient-to-br from-red-900 via-red-800 to-black'
     }
     return 'bg-gradient-to-br from-green-800 via-green-900 to-black'
+  }
+
+  // readable label for current hole choice in header
+  const headerHoleLabel = () => {
+    const s = canonicalHoleMode(holeCardChoice)
+    if (s === '4to9') return '4 to 9'
+    if (s === '4-10') return '4 to 10'
+    if (s === '2-3') return '2 to 3'
+    if (s === 'A-9') return 'A to 9'
+    return 'Perfect'
   }
 
   return (
@@ -623,7 +650,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                 {isSpanish21 ? 'Spanish 21 • ' : ''}
                 Hole Card: 
               </span>
-              <span className="font-semibold">{holeCardChoice}</span>
+              <span className="font-semibold">{headerHoleLabel()}</span>
             </div>
             <button onClick={() => setShowSettings(true)} className="text-white/60 hover:text-white transition-colors">
               <Settings className="w-5 h-5" />
@@ -795,20 +822,32 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
             <h3 className="text-lg font-semibold text-gray-900 mb-3">Edit rules</h3>
 
             <div className="space-y-3 text-sm text-gray-700">
+              {/* Hole card select */}
               <div>
                 <label className="block mb-1">Hole card</label>
-                <select
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                  value={holeCardChoice}
-                  onChange={(e)=>setHoleCardChoice(e.target.value)}
-                >
-                  <option value="perfect">Perfect</option>
-                  <option value="4-10">4-10</option>
-                  <option value="2-3">2-3</option>
-                  <option value="A-9DAS">A-9 DAS</option>
-                  <option value="A-9NoDAS">A-9 NoDAS</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500">Grader uses 4 to 10 or 2 to 3. Other modes fall back to 4 to 10 for grading</p>
+                {isSpanish21 ? (
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    value={holeCardChoice}
+                    onChange={(e)=>setHoleCardChoice(e.target.value)}
+                  >
+                    <option value="perfect">Perfect</option>
+                    <option value="4to9">4 to 9</option>
+                    <option value="2to3">2 to 3</option>
+                  </select>
+                ) : (
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    value={holeCardChoice}
+                    onChange={(e)=>setHoleCardChoice(e.target.value)}
+                  >
+                    <option value="perfect">Perfect</option>
+                    <option value="4to10">4 to 10</option>
+                    <option value="2to3">2 to 3</option>
+                    <option value="Ato9">A to 9 DAS</option>
+                  </select>
+                )}
+                <p className="mt-1 text-xs text-gray-500">Grader uses 4 to 10 or 2 to 3 when needed</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -837,22 +876,25 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
                 </div>
               </div>
 
+              {/* Decks and Double allowed */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block mb-1">Decks</label>
-                  <select
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
-                    value={String(decksCount)}
-                    onChange={(e)=>setDecksCount(Number(e.target.value))}
-                    disabled={disableDecks}
-                  >
-                    <option value="1">1</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                  </select>
-                  {disableDecks && <p className="mt-1 text-xs text-gray-500">Decks fixed to 1 for A 9 modes</p>}
-                </div>
+                {!isSpanish21 && (
+                  <div>
+                    <label className="block mb-1">Decks</label>
+                    <select
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                      value={String(decksCount)}
+                      onChange={(e)=>setDecksCount(Number(e.target.value))}
+                      disabled={disableDecks}
+                    >
+                      <option value="1">1</option>
+                      <option value="4">4</option>
+                      <option value="5">5</option>
+                      <option value="6">6</option>
+                    </select>
+                    {disableDecks && <p className="mt-1 text-xs text-gray-500">Decks fixed by mode</p>}
+                  </div>
+                )}
 
                 <div>
                   <label className="block mb-1">Double allowed</label>

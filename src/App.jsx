@@ -1409,11 +1409,6 @@ function Dashboard() {
         {isSpanish21 && (
           <style>{`
             .s21-scope { background-color: #8B0000; min-height: 100vh; width: 100vw; }
-            .s21-scope .bg-gray-50 { background-color: #8B0000 !important; }
-            .s21-scope .bg-white { background-color: rgba(255,255,255,0.06) !important; }
-            .s21-scope .text-gray-900 { color: #fff !important; }
-            .s21-scope .text-gray-700 { color: #f5f5f5 !important; }
-            .s21-scope .border-gray-200 { border-color: rgba(255,255,255,0.15) !important; }
           `}</style>
         )}
 
