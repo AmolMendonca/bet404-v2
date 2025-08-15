@@ -280,34 +280,36 @@ const getActionColor = (raw) => {
     return m[v] ?? -1
   }
 
-  const transformRegularChart = (apiData) => {
-    const chart = {}
+const transformRegularChart = (apiData) => {
+  const chart = {}
 
-    apiData?.pair_entries?.forEach(entry => {
-      const { dealer_val, player_pair, recommended_move } = entry
-      const rowKey = String(player_pair)
-      if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
-      const idx = getDealerIndex(String(dealer_val))
-      if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
-    })
+  // 1) Pairs, map "12" to "AA" for display only
+  apiData?.pair_entries?.forEach(entry => {
+    const { dealer_val, player_pair, recommended_move } = entry
+    const rowKey = String(player_pair) === '12' ? 'AA' : String(player_pair)
+    if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
+    const idx = getDealerIndex(String(dealer_val))
+    if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
+  })
 
-    apiData?.regular_entries?.forEach(entry => {
-      const { dealer_val, player_hand_type, player_val, recommended_move } = entry
-      let rowKey
-      if (String(player_hand_type).toLowerCase() === 'soft') {
-        const aceValue = Number(player_val) - 11
-        if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}`
-      } else {
-        rowKey = String(player_val)
-      }
-      if (!rowKey) return
-      if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
-      const idx = getDealerIndex(String(dealer_val))
-      if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
-    })
+  // 2) Regular hands, keep hard 12 as "12"
+  apiData?.regular_entries?.forEach(entry => {
+    const { dealer_val, player_hand_type, player_val, recommended_move } = entry
+    let rowKey
+    if (String(player_hand_type).toLowerCase() === 'soft') {
+      const aceValue = Number(player_val) - 11
+      if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}`
+    } else {
+      rowKey = String(player_val)   // hard hands, so 12 stays "12"
+    }
+    if (!rowKey) return
+    if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
+    const idx = getDealerIndex(String(dealer_val))
+    if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
+  })
 
-    return chart
-  }
+  return chart
+}
 
   const transformPerfectChart = (apiData) => {
     const entries = Array.isArray(apiData?.perfect_entries) ? apiData.perfect_entries : []
