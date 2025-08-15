@@ -272,38 +272,37 @@ function StrategyChartPage({ onBack }) {
     return m[v] ?? -1
   }
 
-  // ---- Pair/row labeling helpers to meet requirements ----
-  const pairLabelFromTotal = (maybeTotal) => {
-    const total = Number(maybeTotal)
-    if (!Number.isFinite(total)) return String(maybeTotal)
-    const n = total / 2
-    if (!Number.isFinite(n)) return String(maybeTotal)
-    if (n === 11) return 'AA'
-    if (n === 10) return 'TT'
-    if (n >= 2 && n <= 9) return `${n}${n}`
-    return String(maybeTotal)
+  // === Pair/row labeling helpers ===
+  // map API pair encoding to row labels WITHOUT doing math
+  const mapPairKey = (raw) => {
+    const s = String(raw || '').toUpperCase()
+    if (s === '12') return 'AA'                      // ace pair
+    if (s === '20' || s === '1010') return 'TT'     // tens pair
+    if (/^(2|3|4|5|6|7|8|9)\1$/.test(s)) return s   // '22'..'99'
+    return s
   }
 
   const transformRegularChart = (apiData) => {
     const chart = {}
-    // Pairs -> convert totals (e.g. 20) into proper pair labels (e.g. TT).
+
+    // 1) Pairs — map strictly by string
     apiData?.pair_entries?.forEach(entry => {
       const { dealer_val, player_pair, recommended_move } = entry
-      const rowKey = pairLabelFromTotal(player_pair ?? '')
+      const rowKey = mapPairKey(player_pair)
       if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
       const idx = getDealerIndex(String(dealer_val))
       if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
     })
-    // Regular (hard/soft) totals
+
+    // 2) Regular (hard/soft) totals
     apiData?.regular_entries?.forEach(entry => {
       const { dealer_val, player_hand_type, player_val, recommended_move } = entry
       let rowKey
       if (String(player_hand_type).toLowerCase() === 'soft') {
         const aceValue = Number(player_val) - 11
-        if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}`
+        if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}` // A2..A9
       } else {
-        // ensure 11 is treated as a hard total (not a pair)
-        rowKey = String(player_val)
+        rowKey = String(player_val) // hard totals; keep "12" as hard 12 (distinct from AA)
       }
       if (!rowKey) return
       if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
@@ -480,7 +479,7 @@ function StrategyChartPage({ onBack }) {
 
     const numericKey = (label) => {
       if (isSoft(label)) return parseInt(label.slice(1), 10)
-      if (isPair(label)) return 100 + (pairOrder[label] ?? 99) // ensure pairs come after, AA last
+      if (isPair(label)) return 100 + (pairOrder[label] ?? 99) // ensure pairs come after, TT near bottom, AA last
       if (/^\d+$/.test(label)) return parseInt(label, 10)
       return Number.MAX_SAFE_INTEGER
     }
