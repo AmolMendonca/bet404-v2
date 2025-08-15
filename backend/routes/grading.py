@@ -186,7 +186,7 @@ def grade():
     dealer_up    = data.get('dealer_up', {})
     attempted    = (data.get('action') or '').upper().strip()
 
-    if hole_mode in ('4-10', '2-3', 'A-9DAS', 'A-9NoDAS'):
+    if hole_mode in ('4-10', '2-3', 'A-9DAS', 'A-9NoDAS', 'Spanish_4to9', 'Spanish_2to3'):
         result = _grade_4to10(
             user_id,
             player_cards,
@@ -195,20 +195,20 @@ def grade():
             surrender_allowed,
             soft17_hit,
             double_first_two,
-            hole_mode,   # pass the actual mode
+            hole_mode,   # pass actual mode (works for Spanish too)
             cur
         )
-    elif hole_mode == 'perfect':
-        return jsonify({"todo": "perfect grading not implemented yet"}), 501
+    elif hole_mode == 'perfect' or hole_mode == 'Spanish_perfect':
+        return jsonify({"todo": f"{hole_mode} grading not implemented yet"}), 501
     else:
         return jsonify({"error": f"Unknown hole_mode '{hole_mode}'"}), 400
 
     # TODO: persist stats in user_stats here (increment totals/errors) in a tx.
 
+    # --- persist stats -----------------------------------------------------------
     if isinstance(result, dict) and "mode" in result and "is_correct" in result:
         m = result["mode"]
-        is_correct = bool(result["is_correct"])
-        err_inc = 0 if is_correct else 1
+        err_inc = 0 if bool(result["is_correct"]) else 1
 
         if m == "4-10":
             cur.execute("""
@@ -242,6 +242,22 @@ def grade():
                 WHERE user_id = %s
             """, (err_inc, user_id))
 
+        elif m == "Spanish_4to9":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_spa4to9_hands  = total_spa4to9_hands  + 1,
+                    errors_spa4to9_hands = errors_spa4to9_hands + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
+        elif m == "Spanish_2to3":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_spa2to3_hands  = total_spa2to3_hands  + 1,
+                    errors_spa2to3_hands = errors_spa2to3_hands + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
         elif m == "perfect":
             cur.execute("""
                 UPDATE user_stats
@@ -250,7 +266,16 @@ def grade():
                 WHERE user_id = %s
             """, (err_inc, user_id))
 
+        elif m == "Spanish_perfect":
+            cur.execute("""
+                UPDATE user_stats
+                SET total_spa_perfect_hands   = total_spa_perfect_hands   + 1,
+                    errors_spa_perfect_hands  = errors_spa_perfect_hands  + %s
+                WHERE user_id = %s
+            """, (err_inc, user_id))
+
         db.commit()
+
     return jsonify(result)
 
 # -------------------------
