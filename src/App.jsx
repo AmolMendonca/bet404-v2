@@ -178,7 +178,7 @@ function LoginScreen() {
             </button>
           </div>
 
-          {!isSignUp && (
+        {!isSignUp && (
             <div className="flex justify-between text-sm">
               <span></span>
               <button
@@ -421,6 +421,43 @@ const transformRegularChart = (apiData) => {
     'a9nodas': 'A to 9 NoDAS'
   }
 
+  // NEW: sort rows as hard numbers first, then Ax and AA, then pairs
+  const sortedEntries = React.useMemo(() => {
+    const entries = Object.entries(table)
+
+    const isDigits = (s) => /^\d+$/.test(s)
+    const isSoft = (s) => /^A\d$/.test(s)
+    const isPair = (s) =>
+      s === 'AA' ||
+      s === 'TT' ||
+      s === '1010' ||
+      /^(\d)\1$/.test(s)
+
+    const groupOrder = (label) => {
+      if (isDigits(label) && !isPair(label)) return 0   // hard totals like 5, 6, 7 ...
+      if (isSoft(label) || label === 'AA') return 1     // A2..A9 and AA
+      if (isPair(label)) return 2                       // 22, 33, 44, TT, AA pair labels
+      return 3
+    }
+
+    const numericKey = (label) => {
+      if (/^A(\d)$/.test(label)) return parseInt(label.slice(1), 10) // A2..A9
+      if (label === 'AA') return 11
+      if (label === 'TT' || label === '1010') return 10
+      if (/^(\d)\1$/.test(label)) return parseInt(label[0], 10)      // 22..99
+      if (isDigits(label)) return parseInt(label, 10)                 // hard totals
+      return Number.MAX_SAFE_INTEGER
+    }
+
+    return entries.sort(([a], [b]) => {
+      const ga = groupOrder(a), gb = groupOrder(b)
+      if (ga !== gb) return ga - gb
+      const na = numericKey(a), nb = numericKey(b)
+      if (na !== nb) return na - nb
+      return a.localeCompare(b)
+    })
+  }, [table])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -543,7 +580,7 @@ const transformRegularChart = (apiData) => {
                 </div>
 
                 <div className="divide-y divide-gray-200">
-                  {Object.entries(table).map(([playerHandLabel, actions]) => (
+                  {sortedEntries.map(([playerHandLabel, actions]) => (
                     <div key={playerHandLabel} className="flex">
                       <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-900 bg-gray-50 border-r border-gray-200">{playerHandLabel}</div>
                       {actions.map((action, index) => (
