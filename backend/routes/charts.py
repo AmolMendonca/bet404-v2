@@ -259,3 +259,157 @@ def send_a9nodas_chart():
         'regular_entries': regular_entries,
         'pair_entries':    pair_entries
     })
+
+# assumes charts_bp and _get_chart_id_for_mode already exist in this file
+
+# ---------------------------
+# Spanish 4–9
+# ---------------------------
+@charts_bp.route('/spanish_4to9_chart', methods=['GET'])
+@require_user
+def send_spanish_4to9_chart():
+    db, cur = get_db()
+
+    user_id = g.user['id']
+    chart_id = _get_chart_id_for_mode(cur, user_id, 'Spanish_4to9')
+    if not chart_id:
+        return jsonify({"error": "Spanish 4-9 chart not found for user"}), 404
+
+    cur.execute("""
+        SELECT
+            dealer_val,
+            player_val,
+            player_hand_type,
+            player_pair,
+            recommended_move
+        FROM chart_entries
+        WHERE chart_id = %s
+        ORDER BY player_pair, player_val, dealer_val
+    """, (chart_id,))
+
+    rows = cur.fetchall()
+
+    regular_entries = []
+    pair_entries    = []
+
+    for row in rows:
+        dealer_val       = row['dealer_val']
+        recommended_move = row['recommended_move']
+
+        if row['player_pair']:
+            pair_entries.append({
+                'dealer_val':       dealer_val,
+                'player_pair':      str(row['player_val']),
+                'recommended_move': recommended_move
+            })
+        else:
+            regular_entries.append({
+                'dealer_val':       dealer_val,
+                'player_val':       row['player_val'],
+                'player_hand_type': row['player_hand_type'],
+                'recommended_move': recommended_move
+            })
+
+    return jsonify({
+        'regular_entries': regular_entries,
+        'pair_entries':    pair_entries
+    })
+
+
+# ---------------------------
+# Spanish 2–3
+# ---------------------------
+@charts_bp.route('/spanish_2to3_chart', methods=['GET'])
+@require_user
+def send_spanish_2to3_chart():
+    db, cur = get_db()
+
+    user_id = g.user['id']
+    chart_id = _get_chart_id_for_mode(cur, user_id, 'Spanish_2to3')
+    if not chart_id:
+        return jsonify({"error": "Spanish 2-3 chart not found for user"}), 404
+
+    cur.execute("""
+        SELECT
+            dealer_val,
+            player_val,
+            player_hand_type,
+            player_pair,
+            recommended_move
+        FROM chart_entries
+        WHERE chart_id = %s
+        ORDER BY player_pair, player_val, dealer_val
+    """, (chart_id,))
+
+    rows = cur.fetchall()
+
+    regular_entries = []
+    pair_entries    = []
+
+    for row in rows:
+        dealer_val       = row['dealer_val']
+        recommended_move = row['recommended_move']
+
+        if row['player_pair']:
+            pair_entries.append({
+                'dealer_val':       dealer_val,
+                'player_pair':      str(row['player_val']),
+                'recommended_move': recommended_move
+            })
+        else:
+            regular_entries.append({
+                'dealer_val':       dealer_val,
+                'player_val':       row['player_val'],
+                'player_hand_type': row['player_hand_type'],
+                'recommended_move': recommended_move
+            })
+
+    return jsonify({
+        'regular_entries': regular_entries,
+        'pair_entries':    pair_entries
+    })
+
+
+# ---------------------------
+# Spanish perfect
+# ---------------------------
+@charts_bp.route('/spanish_perfect_chart', methods=['GET'])
+@require_user
+def send_spanish_perfect_chart():
+    db, cur = get_db()
+
+    user_id = g.user['id']
+    chart_id = _get_chart_id_for_mode(cur, user_id, 'Spanish_perfect')
+    if not chart_id:
+        return jsonify({"error": "Spanish perfect chart not found for user"}), 404
+
+    cur.execute("""
+        SELECT
+            dealer_val,
+            hit_until_hard,
+            hit_until_soft,
+            double_hards,
+            double_softs,
+            splits,
+            late_surrender_hards,
+            late_surrender_softs
+        FROM perfect_entries
+        WHERE chart_id = %s
+        ORDER BY dealer_val
+    """, (chart_id,))
+
+    rows = cur.fetchall()
+    entries = []
+    for row in rows:
+        entries.append({
+            "dealer_val":      row["dealer_val"],
+            "harduntil":       row["hit_until_hard"],
+            "softstanduntil":  row["hit_until_soft"],
+            "doublehards":     row["double_hards"],
+            "doublesofts":     row["double_softs"],
+            "splits":          row["splits"],
+            "lshards":         row["late_surrender_hards"],
+            "lssofts":         row["late_surrender_softs"],
+        })
+
+    return jsonify({ "perfect_entries": entries })

@@ -7,6 +7,7 @@ new_user_bp = Blueprint("new_user", __name__)
 
 TEST_USER = "test_user1"
 SPANISH_MODES = ("Spanish_4to9", "Spanish_2to3", "Spanish_perfect")
+PERFECT_MODES = {'perfect', 'Spanish_perfect'}
 VALID_MODES = {
     '4-10','2-3','perfect','A-9DAS','A-9NoDAS',
     'Spanish_4to9','Spanish_2to3','Spanish_perfect'
@@ -21,8 +22,9 @@ def new_user():
     uid = g.user["id"]
     email = g.user["email"]
 
-    # uid = '61832595-68fa-4146-b7ea-7d55df00a3df'
-    # email = 'pritesh82tobayern@gmail.com'
+    BJ_MODES = ["4-10", "2-3", "perfect", "A-9DAS", "A-9NoDAS"]
+    SPA_MODES = ["Spanish_4to9", "Spanish_2to3", "Spanish_perfect"]
+    PERFECT_MODES = {"perfect", "Spanish_perfect"}
 
     try:
         # 1) users row (hardcoded password)
@@ -48,31 +50,43 @@ def new_user():
             ON CONFLICT (user_id) DO NOTHING;
         """, (uid,))
 
-        # 4) allocate five new chart IDs (max+1..+5), insert charts
-        cur.execute("SELECT COALESCE(MAX(chart_id), 0) FROM charts;")
-        max_id = cur.fetchone()[0] or 0
+        # ---------- ID allocation pools ----------
+        # BJ pool: strictly below 15000
+        cur.execute("SELECT COALESCE(MAX(chart_id), 0) FROM charts WHERE chart_id < 15000;")
+        bj_max = cur.fetchone()[0] or 0
 
-        order = [("4-10", max_id + 1),
-                 ("2-3",  max_id + 2),
-                 ("perfect", max_id + 3),
-                 ("A-9DAS", max_id + 4),
-                 ("A-9NoDAS", max_id + 5)]
+        # Need 5 BJ ids; ensure we don't cross into 15000+
+        if bj_max + 5 >= 15000:
+            raise RuntimeError("Not enough BJ chart_id space below 15000 to allocate 5 charts.")
 
-        for mode, cid in order:
+        bj_order = [
+            ("4-10",    bj_max + 1),
+            ("2-3",     bj_max + 2),
+            ("perfect", bj_max + 3),
+            ("A-9DAS",  bj_max + 4),
+            ("A-9NoDAS",bj_max + 5),
+        ]
+
+        # Spanish pool: 15000+
+        cur.execute("SELECT COALESCE(MAX(chart_id), 14999) FROM charts WHERE chart_id >= 15000;")
+        spa_max = cur.fetchone()[0] or 14999
+
+        spa_order = [
+            ("Spanish_4to9",   spa_max + 1),
+            ("Spanish_2to3",   spa_max + 2),
+            ("Spanish_perfect",spa_max + 3),
+        ]
+
+        # Insert chart rows
+        for mode, cid in bj_order + spa_order:
             cur.execute("""
                 INSERT INTO charts (chart_id, user_id, mode)
                 VALUES (%s, %s, %s);
             """, (cid, uid, mode))
 
-        # keep the charts sequence aligned with manual inserts (important if SERIAL)
-        cur.execute("""
-            SELECT setval(pg_get_serial_sequence('charts','chart_id'),
-                          (SELECT MAX(chart_id) FROM charts));
-        """)
-
         # helper to copy entries from test_user1’s chart for a given mode
         def copy_mode(mode: str, dest_chart_id: int):
-            # source chart id (test_user1)
+            # find source chart id (test_user1) for the same mode
             cur.execute("""
                 SELECT chart_id FROM charts
                 WHERE user_id = %s AND mode = %s
@@ -83,17 +97,8 @@ def new_user():
                 raise RuntimeError(f"Missing source chart for {mode} on {TEST_USER}")
             src_chart_id = row[0]
 
-            # clone chart_entries (no entry_id)
-            cur.execute("""
-                INSERT INTO chart_entries
-                    (chart_id, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move)
-                SELECT %s, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move
-                FROM chart_entries
-                WHERE chart_id = %s;
-            """, (dest_chart_id, src_chart_id))
-
-            # clone perfect_entries only for the perfect chart
-            if mode == "perfect":
+            if mode in PERFECT_MODES:
+                # clone perfect_entries
                 cur.execute("""
                     INSERT INTO perfect_entries
                         (chart_id, dealer_val, hit_until_hard, hit_until_soft,
@@ -105,17 +110,32 @@ def new_user():
                     FROM perfect_entries
                     WHERE chart_id = %s;
                 """, (dest_chart_id, src_chart_id))
+            else:
+                # clone chart_entries
+                cur.execute("""
+                    INSERT INTO chart_entries
+                        (chart_id, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move)
+                    SELECT %s, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move
+                    FROM chart_entries
+                    WHERE chart_id = %s;
+                """, (dest_chart_id, src_chart_id))
 
-        # 5) copy entries for all five modes
-        for mode, cid in order:
+        # Copy entries for all modes (BJ + Spanish)
+        for mode, cid in bj_order + spa_order:
             copy_mode(mode, cid)
+
+        # keep the charts sequence aligned with manual inserts (important if SERIAL)
+        cur.execute("""
+            SELECT setval(pg_get_serial_sequence('charts','chart_id'),
+                          (SELECT MAX(chart_id) FROM charts));
+        """)
 
         db.commit()
         return jsonify({
             "ok": True,
             "user_id": uid,
             "email": email,
-            "charts": {mode: cid for mode, cid in order}
+            "charts": {mode: cid for mode, cid in (bj_order + spa_order)}
         }), 201
 
     except Exception as e:
@@ -124,34 +144,34 @@ def new_user():
 
 
 @new_user_bp.post("/reset_entries_default")
-#@require_user
+@require_user
 def reset_entries_default():
     """
     Reset the logged-in user's chart entries for a specific mode back to the defaults
     copied from test_user1.
 
     Request JSON:
-      {
-        "mode": "4-10" | "2-3" | "perfect" | "A-9DAS" | "A-9NoDAS"
-      }
+      { "mode": "4-10" | "2-3" | "perfect" | "A-9DAS" | "A-9NoDAS" | "Spanish_4to9" | "Spanish_2to3" | "Spanish_perfect" }
 
     Response JSON on success:
-      {
-        "ok": true,
-        "mode": "<mode>",
-        "chart_id": <int>,
-        "rows": { "deleted": <int>, "inserted": <int> }
-      }
+      { "ok": true, "mode": "<mode>", "chart_id": <int>, "rows": { "deleted": <int>, "inserted": <int> } }
     """
     data = request.get_json(silent=True) or {}
     mode = data.get("mode")
+
+    VALID_MODES = {
+        '4-10','2-3','perfect',
+        'A-9DAS','A-9NoDAS',
+        'Spanish_4to9','Spanish_2to3','Spanish_perfect'
+    }
+    PERFECT_MODES = {'perfect', 'Spanish_perfect'}
 
     if mode not in VALID_MODES:
         return jsonify({"ok": False, "error": "invalid or missing mode"}), 400
 
     db, cur = get_db()
-    # user_id = g.user["id"]
-    user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
+    user_id = g.user["id"]
+    # user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
 
     # Find destination (caller) chart_id
     cur.execute("""
@@ -180,12 +200,9 @@ def reset_entries_default():
     src_chart_id = row["chart_id"]
 
     try:
-        if mode == "perfect":
-            # wipe destination perfect entries
+        if mode in PERFECT_MODES:
             cur.execute("DELETE FROM perfect_entries WHERE chart_id = %s;", (dest_chart_id,))
             deleted = cur.rowcount
-
-            # clone from test_user1
             cur.execute("""
                 INSERT INTO perfect_entries
                     (chart_id, dealer_val, hit_until_hard, hit_until_soft,
@@ -199,11 +216,8 @@ def reset_entries_default():
             """, (dest_chart_id, src_chart_id))
             inserted = cur.rowcount
         else:
-            # wipe destination standard entries
             cur.execute("DELETE FROM chart_entries WHERE chart_id = %s;", (dest_chart_id,))
             deleted = cur.rowcount
-
-            # clone from test_user1
             cur.execute("""
                 INSERT INTO chart_entries
                     (chart_id, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move)
@@ -214,20 +228,16 @@ def reset_entries_default():
             inserted = cur.rowcount
 
         db.commit()
-        return jsonify({
-            "ok": True,
-            "mode": mode,
-            "chart_id": dest_chart_id,
-            "rows": {"deleted": deleted, "inserted": inserted}
-        }), 200
-
+        return jsonify({"ok": True, "mode": mode, "chart_id": dest_chart_id,
+                        "rows": {"deleted": deleted, "inserted": inserted}}), 200
     except Exception as e:
         db.rollback()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+
+
 @new_user_bp.post("/admin/bootstrap_spanish_charts")
-@require_user  # comment this if you want to curl without auth
 def bootstrap_spanish_charts():
     """
     One-time bootstrap:

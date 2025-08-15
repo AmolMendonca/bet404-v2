@@ -1,2 +1,2 @@
-curl -i -X POST http://127.0.0.1:5001/api/grade   -H "Content-Type: application/json"   -d '{"user_id":"test_user1","hole_mode":"2-3","player_cards":[{"rank":"A","suit":"hearts"},{"rank":"A","suit":"clubs"}],"dealer_up":{"rank":"3","suit":"diamonds"},"action":"S"}'
+curl -i -X POST http://127.0.0.1:5001/api/grade   -H "Content-Type: application/json"   -d '{"user_id":"test_user1","hole_mode":"A-9NoDAS","player_cards":[{"rank":"5","suit":"hearts"},{"rank":"7","suit":"clubs"}],"dealer_up":{"rank":"6","suit":"diamonds"},"action":"S"}'
 
