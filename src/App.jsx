@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useAuth } from './hooks/useAuth'
 import GameTable from './components/GameTable'
@@ -7,9 +7,7 @@ import {
   BookOpen, ChevronDown, ChevronUp, ArrowLeft, Edit3, RefreshCw
 } from 'lucide-react'
 import { getAccessToken } from './lib/supabase.js'
-
 import { supabase } from './lib/supabase.js'
-
 
 /* ----------------------------- Shared UI bits ----------------------------- */
 
@@ -178,7 +176,7 @@ function LoginScreen() {
             </button>
           </div>
 
-        {!isSignUp && (
+          {!isSignUp && (
             <div className="flex justify-between text-sm">
               <span></span>
               <button
@@ -221,7 +219,7 @@ function LoginScreen() {
 }
 
 /* ------------------------- Strategy chart page (lite) ------------------------- */
-/* ------------------------- Strategy chart page (lite) ------------------------- */
+
 function StrategyChartPage({ onBack }) {
   const [bucket, setBucket] = React.useState('4to10')
   const [editable, setEditable] = React.useState(true)
@@ -231,7 +229,6 @@ function StrategyChartPage({ onBack }) {
 
   const dealerCards = ['2','3','4','5','6','7','8','9','10','A']
 
-  // added a9das and a9nodas buckets, same structure
   const [charts, setCharts] = React.useState({
     '4to10':  { hard: {} },
     '2to3':   { hard: {} },
@@ -241,7 +238,6 @@ function StrategyChartPage({ onBack }) {
 
   const [perfectChart, setPerfectChart] = React.useState({ rows: [] })
 
-  // authenticated fetch helper, attaches Supabase token and sends cookies
   const authFetch = async (path, init = {}) => {
     const token = await getAccessToken()
     const headers = new Headers(init.headers || {})
@@ -250,66 +246,52 @@ function StrategyChartPage({ onBack }) {
     return fetch(path, { ...init, headers, credentials: 'include' })
   }
 
-const getActionColor = (raw) => {
-  const a = String(raw || '').toUpperCase()
-  const head = a[0] || ''
+  const getActionColor = (raw) => {
+    const a = String(raw || '').toUpperCase()
+    const head = a[0] || ''
 
-  // Red for Stand
-  if (head === 'S') return 'bg-red-100 text-red-800'
+    if (head === 'S') return 'bg-red-100 text-red-800'
+    if (head === 'H') return 'bg-yellow-100 text-yellow-800'
+    if (head === 'D' && !a.startsWith('DS') && !a.startsWith('D/S')) return 'bg-green-100 text-green-800'
+    if (a.startsWith('DS') || a.startsWith('D/S')) return 'bg-green-50 text-green-700'
+    if (head === 'P') return 'bg-blue-100 text-blue-800'
+    if (a.startsWith('RH') || a.includes('PRH')) return 'bg-blue-50 text-blue-700'
+    return 'bg-gray-100 text-gray-800'
+  }
 
-  // Yellow for Hit
-  if (head === 'H') return 'bg-yellow-100 text-yellow-800'
-
-  // Green for Double
-  if (head === 'D' && !a.startsWith('DS') && !a.startsWith('D/S')) return 'bg-green-100 text-green-800'
-
-  // Light green for things like DS or D/S
-  if (a.startsWith('DS') || a.startsWith('D/S')) return 'bg-green-50 text-green-700'
-
-  // Blue for Split
-  if (head === 'P') return 'bg-blue-100 text-blue-800'
-
-  // Light blue for things like RH or PRH
-  if (a.startsWith('RH') || a.includes('PRH')) return 'bg-blue-50 text-blue-700'
-
-  // Default gray
-  return 'bg-gray-100 text-gray-800'
-}
   const getDealerIndex = (v) => {
     const m = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'10':8,'A':9 }
     return m[v] ?? -1
   }
 
-const transformRegularChart = (apiData) => {
-  const chart = {}
+  const transformRegularChart = (apiData) => {
+    const chart = {}
 
-  // 1) Pairs, map "12" to "AA" for display only
-  apiData?.pair_entries?.forEach(entry => {
-    const { dealer_val, player_pair, recommended_move } = entry
-    const rowKey = String(player_pair) === '12' ? 'AA' : String(player_pair)
-    if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
-    const idx = getDealerIndex(String(dealer_val))
-    if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
-  })
+    apiData?.pair_entries?.forEach(entry => {
+      const { dealer_val, player_pair, recommended_move } = entry
+      const rowKey = String(player_pair) === '12' ? 'AA' : String(player_pair)
+      if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
+      const idx = getDealerIndex(String(dealer_val))
+      if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
+    })
 
-  // 2) Regular hands, keep hard 12 as "12"
-  apiData?.regular_entries?.forEach(entry => {
-    const { dealer_val, player_hand_type, player_val, recommended_move } = entry
-    let rowKey
-    if (String(player_hand_type).toLowerCase() === 'soft') {
-      const aceValue = Number(player_val) - 11
-      if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}`
-    } else {
-      rowKey = String(player_val)   // hard hands, so 12 stays "12"
-    }
-    if (!rowKey) return
-    if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
-    const idx = getDealerIndex(String(dealer_val))
-    if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
-  })
+    apiData?.regular_entries?.forEach(entry => {
+      const { dealer_val, player_hand_type, player_val, recommended_move } = entry
+      let rowKey
+      if (String(player_hand_type).toLowerCase() === 'soft') {
+        const aceValue = Number(player_val) - 11
+        if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}`
+      } else {
+        rowKey = String(player_val)
+      }
+      if (!rowKey) return
+      if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
+      const idx = getDealerIndex(String(dealer_val))
+      if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
+    })
 
-  return chart
-}
+    return chart
+  }
 
   const transformPerfectChart = (apiData) => {
     const entries = Array.isArray(apiData?.perfect_entries) ? apiData.perfect_entries : []
@@ -421,7 +403,6 @@ const transformRegularChart = (apiData) => {
     'a9nodas': 'A to 9 NoDAS'
   }
 
-  // NEW: sort rows as hard numbers first, then Ax and AA, then pairs
   const sortedEntries = React.useMemo(() => {
     const entries = Object.entries(table)
 
@@ -434,18 +415,18 @@ const transformRegularChart = (apiData) => {
       /^(\d)\1$/.test(s)
 
     const groupOrder = (label) => {
-      if (isDigits(label) && !isPair(label)) return 0   // hard totals like 5, 6, 7 ...
-      if (isSoft(label) || label === 'AA') return 1     // A2..A9 and AA
-      if (isPair(label)) return 2                       // 22, 33, 44, TT, AA pair labels
+      if (isDigits(label) && !isPair(label)) return 0
+      if (isSoft(label) || label === 'AA') return 1
+      if (isPair(label)) return 2
       return 3
     }
 
     const numericKey = (label) => {
-      if (/^A(\d)$/.test(label)) return parseInt(label.slice(1), 10) // A2..A9
+      if (/^A(\d)$/.test(label)) return parseInt(label.slice(1), 10)
       if (label === 'AA') return 11
       if (label === 'TT' || label === '1010') return 10
-      if (/^(\d)\1$/.test(label)) return parseInt(label[0], 10)      // 22..99
-      if (isDigits(label)) return parseInt(label, 10)                 // hard totals
+      if (/^(\d)\1$/.test(label)) return parseInt(label[0], 10)
+      if (isDigits(label)) return parseInt(label, 10)
       return Number.MAX_SAFE_INTEGER
     }
 
@@ -522,32 +503,32 @@ const transformRegularChart = (apiData) => {
             {showLegend && (
               <div className="mt-2 text-xs text-gray-700 space-y-2">
                 <div className="grid grid-cols-5 gap-2">
-<div className="flex flex-wrap gap-3">
-  <div className="flex items-center space-x-2">
-    <span className="px-2 py-1 rounded bg-red-100 text-red-800 font-medium">S</span>
-    <span>Stand</span>
-  </div>
-  <div className="flex items-center space-x-2">
-    <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 font-medium">H</span>
-    <span>Hit</span>
-  </div>
-  <div className="flex items-center space-x-2">
-    <span className="px-2 py-1 rounded bg-green-100 text-green-800 font-medium">D</span>
-    <span>Double</span>
-  </div>
-  <div className="flex items-center space-x-2">
-    <span className="px-2 py-1 rounded bg-green-50 text-green-700 font-medium">DS</span>
-    <span>DS / D/S</span>
-  </div>
-  <div className="flex items-center space-x-2">
-    <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">P</span>
-    <span>Split</span>
-  </div>
-  <div className="flex items-center space-x-2">
-    <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-medium">RH</span>
-    <span>RH / PRH</span>
-  </div>
-</div>
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-red-100 text-red-800 font-medium">S</span>
+                      <span>Stand</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 font-medium">H</span>
+                      <span>Hit</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-green-100 text-green-800 font-medium">D</span>
+                      <span>Double</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-green-50 text-green-700 font-medium">DS</span>
+                      <span>DS / D/S</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">P</span>
+                      <span>Split</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-medium">RH</span>
+                      <span>RH / PRH</span>
+                    </div>
+                  </div>
                 </div>
                 <div className="mt-2">
                   <div className="font-medium">Syntax</div>
@@ -629,23 +610,23 @@ const transformRegularChart = (apiData) => {
                       <th className="px-2 py-2 border border-gray-200 text-left">Surrender</th>
                     </tr>
                   </thead>
-<tbody>
-  {perfectChart.rows.map((row, i) => {
-    const c = row.columns || {}
-    const renderCell = (val) => val && val.trim() !== '' ? val : '❌'
-    return (
-      <tr key={i} className="odd:bg-white even:bg-gray-50">
-        <td className="px-2 py-2 border border-gray-100 font-medium text-gray-900">{row.rowLabel}</td>
-        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Hard'])}</td>
-        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Soft'])}</td>
-        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Hards'])}</td>
-        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Softs'])}</td>
-        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Splits'])}</td>
-        <td className="px-2 py-2 border border-gray-100">{renderCell(c['Surrender'])}</td>
-      </tr>
-    )
-  })}
-</tbody>
+                  <tbody>
+                    {perfectChart.rows.map((row, i) => {
+                      const c = row.columns || {}
+                      const renderCell = (val) => val && val.trim() !== '' ? val : '❌'
+                      return (
+                        <tr key={i} className="odd:bg-white even:bg-gray-50">
+                          <td className="px-2 py-2 border border-gray-100 font-medium text-gray-900">{row.rowLabel}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Hard'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Soft'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Hards'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Softs'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Splits'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Surrender'])}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
                 </table>
               </div>
             )}
@@ -656,41 +637,23 @@ const transformRegularChart = (apiData) => {
   )
 }
 
-/* --------------------------- Blackjack settings UI -------------------------- */
+/* --------------------------- Unified Play settings -------------------------- */
 
-/* --------------------------- Blackjack settings UI -------------------------- */
+function PlaySettings({ onStart, onBack }) {
+  const [gameType, setGameType] = useState('blackjack')
 
-function BlackjackSettings({ onStart, onBack }) {
-  const [holeCard, setHoleCard] = useState('perfect')                // "perfect" | "4-10" | "2-3" | "A-9DAS" | "A-9NoDAS"
-  const [surrenderAllowed, setSurrenderAllowed] = useState('Yes')    // "Yes" | "No"
-  const [soft17Setting, setSoft17Setting] = useState('Hit')          // "Hit" | "Stand"
-  const [decksCount, setDecksCount] = useState('6')                  // "1" | "4" | "5" | "6"
-  const [doubleAllowed, setDoubleAllowed] = useState('any')          // "any" | "9-11" | "10-11"
+  const [bjHoleCard, setBjHoleCard] = useState('perfect')
+  const [bjSurrender, setBjSurrender] = useState('Yes')
+  const [bjSoft17, setBjSoft17] = useState('Hit')
+  const [bjDecks, setBjDecks] = useState('6')
+  const [bjDouble, setBjDouble] = useState('any')
+
+  const [spHoleCard, setSpHoleCard] = useState('Spanish_perfect') // Spanish_4to9, Spanish_2to3, Spanish_perfect
+  const [spSurrender, setSpSurrender] = useState('Yes')
+  const [spSoft17, setSpSoft17] = useState('Hit')
+  const [spDouble, setSpDouble] = useState('any')
+
   const [submitting, setSubmitting] = useState(false)
-
-  const disableDecks = holeCard === 'A-9DAS' || holeCard === 'A-9NoDAS'
-
-  // client settings for GameTable, unchanged shape
-  const clientSettings = useMemo(() => ({
-    hole_mode:
-      holeCard === '4-10' ? '4to10'
-      : holeCard === '2-3' ? '2to3'
-      : (holeCard === 'A-9DAS' || holeCard === 'A-9NoDAS') ? 'Ato9'
-      : 'perfect',
-    surrender_allowed: surrenderAllowed === 'Yes',
-    soft17_hit: soft17Setting === 'Hit',
-    decks_count: Number(decksCount),
-    double_first_two: doubleAllowed,
-  }), [holeCard, surrenderAllowed, soft17Setting, decksCount, doubleAllowed])
-
-  // backend payload with exact keys and values
-  const backendPayload = useMemo(() => ({
-    'Hole Card': holeCard,
-    'Surrender': surrenderAllowed,
-    'Dealer_soft_17': soft17Setting,
-    'Decks': disableDecks ? 1 : Number(decksCount),
-    'Double allowed': doubleAllowed,
-  }), [holeCard, surrenderAllowed, soft17Setting, decksCount, doubleAllowed, disableDecks])
 
   const authFetch = async (path, init = {}) => {
     const token = await getAccessToken()
@@ -700,6 +663,53 @@ function BlackjackSettings({ onStart, onBack }) {
     return fetch(path, { ...init, headers, credentials: 'include' })
   }
 
+  const clientSettings = useMemo(() => {
+    if (gameType === 'blackjack') {
+      return {
+        game_type: 'blackjack',
+        hole_mode:
+          bjHoleCard === '4-10' ? '4to10'
+          : bjHoleCard === '2-3' ? '2to3'
+          : (bjHoleCard === 'A-9DAS' || bjHoleCard === 'A-9NoDAS') ? 'Ato9'
+          : 'perfect',
+        surrender_allowed: bjSurrender === 'Yes',
+        soft17_hit: bjSoft17 === 'Hit',
+        decks_count: Number(bjDecks),
+        double_first_two: bjDouble,
+      }
+    }
+    return {
+      game_type: 'spanish21',
+      hole_mode:
+        spHoleCard === 'Spanish_4to9' ? '4to9'
+        : spHoleCard === 'Spanish_2to3' ? '2to3'
+        : 'perfect',
+      surrender_allowed: spSurrender === 'Yes',
+      soft17_hit: spSoft17 === 'Hit',
+      decks_count: 1,
+      double_first_two: spDouble,
+    }
+  }, [gameType, bjHoleCard, bjSurrender, bjSoft17, bjDecks, bjDouble, spHoleCard, spSurrender, spSoft17, spDouble])
+
+  const backendPayload = useMemo(() => {
+    if (gameType === 'blackjack') {
+      return {
+        'Hole Card': bjHoleCard,
+        'Surrender': bjSurrender,
+        'Dealer_soft_17': bjSoft17,
+        'Decks': Number(bjDecks),
+        'Double allowed': bjDouble,
+      }
+    }
+    return {
+      'Hole Card': spHoleCard, // Spanish_perfect or Spanish_4to9 or Spanish_2to3
+      'Surrender': spSurrender,
+      'Dealer_soft_17': spSoft17,
+      'Decks': 6,
+      'Double allowed': spDouble,
+    }
+  }, [gameType, bjHoleCard, bjSurrender, bjSoft17, bjDecks, bjDouble, spHoleCard, spSurrender, spSoft17, spDouble])
+
   const submitAndStart = async () => {
     setSubmitting(true)
     try {
@@ -708,13 +718,11 @@ function BlackjackSettings({ onStart, onBack }) {
         body: JSON.stringify(backendPayload),
       })
       if (!res.ok) {
-        const msg = `Settings update failed, HTTP ${res.status}`
-        console.error(msg)
-        toast.error(msg)
+        toast.error(`Settings update failed, HTTP ${res.status}`)
         return
       }
       toast.success('Settings saved')
-      onStart(clientSettings)
+      onStart(clientSettings, gameType)
     } catch (e) {
       console.error(e)
       toast.error('Could not reach server')
@@ -723,34 +731,66 @@ function BlackjackSettings({ onStart, onBack }) {
     }
   }
 
+  const isBJ = gameType === 'blackjack'
+  const isSP = gameType === 'spanish21'
+  const bjDisableDecks = bjHoleCard === 'A-9DAS' || bjHoleCard === 'A-9NoDAS'
+
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNav title="Settings" onGo={onBack} showBack />
       <main className="px-4 py-4 max-w-md mx-auto">
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
-
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Hole card</label>
+            <label className="block text-sm text-gray-700 mb-1">Game</label>
             <select
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              value={holeCard}
-              onChange={(e)=>setHoleCard(e.target.value)}
+              value={gameType}
+              onChange={(e)=>setGameType(e.target.value)}
             >
-              <option value="perfect">Perfect</option>
-              <option value="4-10">4-10</option>
-              <option value="2-3">2-3</option>
-              <option value="A-9DAS">A-9 DAS</option>
-              <option value="A-9NoDAS">A-9 NoDAS</option>
+              <option value="blackjack">Blackjack</option>
+              <option value="spanish21">Spanish 21</option>
             </select>
           </div>
+
+          {isBJ && (
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">Hole card</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                value={bjHoleCard}
+                onChange={(e)=>setBjHoleCard(e.target.value)}
+              >
+                <option value="perfect">Perfect</option>
+                <option value="4-10">4-10</option>
+                <option value="2-3">2-3</option>
+                <option value="A-9DAS">A-9 DAS</option>
+                <option value="A-9NoDAS">A-9 NoDAS</option>
+              </select>
+            </div>
+          )}
+
+          {isSP && (
+            <div>
+              <label className="block text-sm text-gray-700 mb-1">Hole card</label>
+              <select
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                value={spHoleCard}
+                onChange={(e)=>setSpHoleCard(e.target.value)}
+              >
+                <option value="Spanish_perfect">Spanish perfect</option>
+                <option value="Spanish_4to9">Spanish 4 to 9</option>
+                <option value="Spanish_2to3">Spanish 2 to 3</option>
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-gray-700 mb-1">Surrender</label>
               <select
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                value={surrenderAllowed}
-                onChange={(e)=>setSurrenderAllowed(e.target.value)}
+                value={isBJ ? bjSurrender : spSurrender}
+                onChange={(e)=> isBJ ? setBjSurrender(e.target.value) : setSpSurrender(e.target.value)}
               >
                 <option value="Yes">Yes</option>
                 <option value="No">No</option>
@@ -761,8 +801,8 @@ function BlackjackSettings({ onStart, onBack }) {
               <label className="block text-sm text-gray-700 mb-1">Dealer soft 17</label>
               <select
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                value={soft17Setting}
-                onChange={(e)=>setSoft17Setting(e.target.value)}
+                value={isBJ ? bjSoft17 : spSoft17}
+                onChange={(e)=> isBJ ? setBjSoft17(e.target.value) : setSpSoft17(e.target.value)}
               >
                 <option value="Hit">Hit</option>
                 <option value="Stand">Stand</option>
@@ -770,35 +810,35 @@ function BlackjackSettings({ onStart, onBack }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {isBJ && (
             <div>
               <label className="block text-sm text-gray-700 mb-1">Decks</label>
               <select
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-400"
-                value={decksCount}
-                onChange={(e)=>setDecksCount(e.target.value)}
-                disabled={disableDecks}
+                value={bjDecks}
+                onChange={(e)=>setBjDecks(e.target.value)}
+                disabled={bjDisableDecks}
               >
                 <option value="1">1</option>
                 <option value="4">4</option>
                 <option value="5">5</option>
                 <option value="6">6</option>
               </select>
-              {disableDecks && <p className="mt-1 text-xs text-gray-500">Decks fixed to 1 for A 9 modes</p>}
+              {bjDisableDecks && <p className="mt-1 text-xs text-gray-500">Decks fixed to 1 for A 9 modes</p>}
             </div>
+          )}
 
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Double allowed</label>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                value={doubleAllowed}
-                onChange={(e)=>setDoubleAllowed(e.target.value)}
-              >
-                <option value="any">any</option>
-                <option value="9-11">9-11</option>
-                <option value="10-11">10-11</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm text-gray-700 mb-1">Double allowed</label>
+            <select
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              value={isBJ ? bjDouble : spDouble}
+              onChange={(e)=> isBJ ? setBjDouble(e.target.value) : setSpDouble(e.target.value)}
+            >
+              <option value="any">any</option>
+              <option value="9-11">9-11</option>
+              <option value="10-11">10-11</option>
+            </select>
           </div>
 
           <button
@@ -806,7 +846,7 @@ function BlackjackSettings({ onStart, onBack }) {
             disabled={submitting}
             className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800 disabled:opacity-50"
           >
-            {submitting ? 'Saving…' : 'Start Blackjack'}
+            {submitting ? 'Saving…' : 'Start'}
           </button>
         </div>
 
@@ -815,7 +855,7 @@ function BlackjackSettings({ onStart, onBack }) {
             onClick={() => onBack('home')}
             className="w-full border border-gray-200 py-3 rounded-lg bg-white"
           >
-            More games
+            Home
           </button>
           <button
             onClick={() => onBack('strategy')}
@@ -829,104 +869,6 @@ function BlackjackSettings({ onStart, onBack }) {
     </div>
   )
 }
-
-/* --------------------------- Spanish 21 settings UI -------------------------- */
-
-// In your App.jsx, update the Spanish21Settings function:
-
-function Spanish21Settings({ onStart, onBack }) {
-  const [holeCard, setHoleCard] = useState('perfect') // perfect, 4-9, 2-3
-  const [surrenderAllowed, setSurrenderAllowed] = useState('yes') // yes or no
-  const [soft17Hit, setSoft17Hit] = useState('true') // true or false
-  const [doubleAllowed, setDoubleAllowed] = useState('any') // any, 9-11, 10-11
-
-  const settings = useMemo(() => ({
-    game_type: 'spanish21', // ← This is the key line that was missing!
-    hole_mode: holeCard === '4-9' ? '4to9' : holeCard === '2-3' ? '2to3' : 'perfect',
-    surrender_allowed: surrenderAllowed === 'yes',
-    soft17_hit: soft17Hit === 'true',
-    double_first_two: doubleAllowed === 'any' ? 'any' : doubleAllowed
-  }), [holeCard, surrenderAllowed, soft17Hit, doubleAllowed])
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <TopNav title="Spanish 21" onGo={onBack} showBack />
-      <main className="px-4 py-4 max-w-md mx-auto">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Hole card</label>
-            <select
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              value={holeCard}
-              onChange={(e)=>setHoleCard(e.target.value)}
-            >
-              <option value="perfect">Perfect</option>
-              <option value="4-9">4-9</option>
-              <option value="2-3">2-3</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Surrender</label>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                value={surrenderAllowed}
-                onChange={(e)=>setSurrenderAllowed(e.target.value)}
-              >
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-700 mb-1">Dealer soft 17</label>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                value={soft17Hit}
-                onChange={(e)=>setSoft17Hit(e.target.value)}
-              >
-                <option value="true">Hit</option>
-                <option value="false">Stand</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-700 mb-1">Double allowed</label>
-            <select
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              value={doubleAllowed}
-              onChange={(e)=>setDoubleAllowed(e.target.value)}
-            >
-              <option value="any">Any</option>
-              <option value="9-11">9-11</option>
-              <option value="10-11">10-11</option>
-            </select>
-          </div>
-
-          <button
-            onClick={() => onStart(settings)}
-            className="w-full bg-black text-white py-3 rounded-lg hover:bg-gray-800"
-          >
-            Start Spanish 21
-          </button>
-        </div>
-
-        <div className="mt-6 space-y-3">
-          <button
-            onClick={() => onBack('home')}
-            className="w-full border border-gray-200 py-3 rounded-lg bg-white"
-          >
-            More games
-          </button>
-        </div>
-      </main>
-    </div>
-  )
-}
-
-/* ---------------------------- Simple info pages ---------------------------- */
 
 /* ------------------------------- Stats page ------------------------------- */
 
@@ -1147,7 +1089,6 @@ function StatsPage({ onBack }) {
     <div className="min-h-screen bg-gray-50">
       <TopNav title="Stats" onGo={onBack} showBack />
       <main className="mx-auto w-full max-w-6xl px-4 py-4">
-        {/* Top summary, responsive grid */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <StatCard label="Hands" value={overview.total} />
           <StatCard label="Accuracy" value={`${overview.accuracy}%`} sub={`${overview.correct} correct`} />
@@ -1155,9 +1096,7 @@ function StatsPage({ onBack }) {
           <StatCard label="Streak" value={streak} />
         </div>
 
-        {/* Two column layout on large screens */}
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Left column */}
           <section className="lg:col-span-2 space-y-4">
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <Section
@@ -1180,7 +1119,6 @@ function StatsPage({ onBack }) {
             </div>
           </section>
 
-          {/* Right column */}
           <section className="space-y-4">
             <Section
               title="Recent mistakes"
@@ -1206,7 +1144,6 @@ function StatsPage({ onBack }) {
           </section>
         </div>
 
-        {/* Bottom actions */}
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <button
             onClick={reload}
@@ -1226,6 +1163,8 @@ function StatsPage({ onBack }) {
   )
 }
 
+/* ---------------------------- Simple info pages ---------------------------- */
+
 function AboutPage({ onBack }) {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1233,7 +1172,7 @@ function AboutPage({ onBack }) {
       <main className="px-4 py-4 max-w-md mx-auto">
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-sm text-gray-700">
           <p>Bet404 is a mobile first trainer for Blackjack and Spanish 21.</p>
-          <p>Use the Blackjack settings screen to set your table rules, then start training.</p>
+          <p>Use the Settings screen to set table rules, then start training.</p>
         </div>
       </main>
     </div>
@@ -1269,27 +1208,27 @@ function Home({ onGo }) {
       <main className="px-4 py-6 max-w-md mx-auto">
         <div className="grid grid-cols-1 gap-4">
           <button
-            onClick={() => onGo('blackjack')}
+            onClick={() => onGo('settings')}
             className="group bg-black text-white p-4 rounded-xl"
           >
             <div className="flex items-center space-x-3">
               <Gamepad2 size={24} />
               <div className="text-left">
-                <div className="font-medium">Blackjack</div>
-                <div className="text-xs text-gray-300">Set rules and start</div>
+                <div className="font-medium">Play</div>
+                <div className="text-xs text-gray-300">Choose Blackjack or Spanish 21</div>
               </div>
             </div>
           </button>
 
           <button
-            onClick={() => onGo('spanish21')}
+            onClick={() => onGo('strategy')}
             className="group border border-gray-200 p-4 rounded-xl bg-white"
           >
             <div className="flex items-center space-x-3">
-              <Gamepad2 size={24} className="text-gray-500" />
+              <BookOpen size={24} className="text-gray-500" />
               <div className="text-left">
-                <div className="font-medium text-gray-900">Spanish 21</div>
-                <div className="text-xs text-gray-500">Set rules and start</div>
+                <div className="font-medium text-gray-900">Strategy chart</div>
+                <div className="text-xs text-gray-500">Browse charts</div>
               </div>
             </div>
           </button>
@@ -1337,24 +1276,17 @@ function Dashboard() {
 
   const go = (next) => setRoute(next)
 
-  const startBlackjack = (settings) => {
+  const startGame = (settings, gameType) => {
     setPendingSettings(settings)
-    setActiveGame({ mode: 'custom', settings, game: 'blackjack' })
-    setRoute('play')
-  }
-
-  const startSpanish21 = (settings) => {
-    setPendingSettings(settings)
-    setActiveGame({ mode: 'custom', settings, game: 'spanish21' })
+    setActiveGame({ mode: 'custom', settings, game: gameType })
     setRoute('play')
   }
 
   if (route === 'strategy') return <StrategyChartPage onBack={go} />
-  if (route === 'blackjack') return <BlackjackSettings onStart={startBlackjack} onBack={go} />
-  if (route === 'spanish21') return <Spanish21Settings onStart={startSpanish21} onBack={go} />
+  if (route === 'settings') return <PlaySettings onStart={startGame} onBack={go} />
   if (route === 'stats') return <StatsPage onBack={go} />
   if (route === 'about') return <AboutPage onBack={go} />
-  if (route === 'settings') return <SettingsPage onBack={go} />
+  if (route === 'settings-app') return <SettingsPage onBack={go} />
   if (route === 'more') {
     return (
       <div className="min-h-screen bg-gray-50">
