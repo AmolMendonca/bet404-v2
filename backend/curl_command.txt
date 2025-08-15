@@ -1,2 +1,12 @@
 curl -i -X POST http://127.0.0.1:5001/api/grade   -H "Content-Type: application/json"   -d '{"user_id":"test_user1","hole_mode":"A-9NoDAS","player_cards":[{"rank":"5","suit":"hearts"},{"rank":"7","suit":"clubs"}],"dealer_up":{"rank":"6","suit":"diamonds"},"action":"S"}'
 
+curl -X POST http://localhost:5001/api/chart/update_cell \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "Spanish_4to9",
+    "dealer_val": "4",
+    "player_val": 12,
+    "player_pair": true,
+    "player_hand_type": "soft",
+    "new_move": "P"
+  }'
