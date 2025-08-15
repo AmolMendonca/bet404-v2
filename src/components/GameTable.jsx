@@ -254,16 +254,18 @@ const resolveHoleModeForGrader = (holeCardChoice) => {
 }
 
 // client settings hole_mode from backend choice
+// replace your current function
 const clientHoleModeFromChoice = (choice) => {
   const c = String(choice || '').trim()
   // Spanish 21
   if (c === 'Spanish_perfect' || c === 'perfect') return 'perfect'
-  if (c === 'Spanish_4to9' || c === '4to9')   return '4to9'
-  if (c === 'Spanish_2to3' || c === '2to3')   return '2to3'
+  if (c === 'Spanish_4to9' || c === '4to9') return '4to9'
+  if (c === 'Spanish_2to3' || c === '2to3') return '2to3'
   // Blackjack
-  if (c === '4-10' || c === '4to10')          return '4to10'
-  if (c === '2-3'  || c === '2to3')          return '2to3'
-  if (c === 'A-9DAS' || c === 'A-9NoDAS' || c === 'Ato9') return 'Ato9'
+  if (c === '4-10' || c === '4to10') return '4to10'
+  if (c === '2-3'  || c === '2to3') return '2to3'
+  if (c === 'A-9DAS' || c === 'Ato9DAS') return 'Ato9DAS'
+  if (c === 'A-9NoDAS' || c === 'Ato9NoDAS') return 'Ato9NoDAS'
   return 'perfect'
 }
 
@@ -274,13 +276,13 @@ const choiceFromClientHoleMode = (hm, isSpanish = false) => {
     if (h === 'perfect') return 'Spanish_perfect'
     if (h === '4to9') return 'Spanish_4to9'
     if (h === '2to3') return 'Spanish_2to3'
-    // default
     return 'Spanish_perfect'
   }
   if (h === '4to10') return '4-10'
   if (h === '2to3') return '2-3'
+  if (h === 'Ato9DAS') return 'A-9DAS'
+  if (h === 'Ato9NoDAS') return 'A-9NoDAS'
   if (h === 'perfect') return 'perfect'
-  if (h === 'Ato9') return 'A-9DAS'
   return 'perfect'
 }
 
