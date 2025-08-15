@@ -371,18 +371,18 @@ INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, d
 (99,'10',20,'hard',NULL,TRUE,'H'),
 (99,'A',20,'hard',NULL,TRUE,'H');
 
--- AA (Spanish) encode as 12 + soft + pair; keep move 'H' as in your seed
+-- AA (same code 22; duplicate rows by design per your example)
 INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move) VALUES
-(99,'2', 12,'soft',NULL,TRUE,'H'),
-(99,'3', 12,'soft',NULL,TRUE,'H'),
-(99,'4', 12,'soft',NULL,TRUE,'H'),
-(99,'5', 12,'soft',NULL,TRUE,'H'),
-(99,'6', 12,'soft',NULL,TRUE,'H'),
-(99,'7', 12,'soft',NULL,TRUE,'H'),
-(99,'8', 12,'soft',NULL,TRUE,'H'),
-(99,'9', 12,'soft',NULL,TRUE,'H'),
-(99,'10',12,'soft',NULL,TRUE,'H'),
-(99,'A', 12,'soft',NULL,TRUE,'H');
+(99,'2',22,'hard',NULL,TRUE,'H'),
+(99,'3',22,'hard',NULL,TRUE,'H'),
+(99,'4',22,'hard',NULL,TRUE,'H'),
+(99,'5',22,'hard',NULL,TRUE,'H'),
+(99,'6',22,'hard',NULL,TRUE,'H'),
+(99,'7',22,'hard',NULL,TRUE,'H'),
+(99,'8',22,'hard',NULL,TRUE,'H'),
+(99,'9',22,'hard',NULL,TRUE,'H'),
+(99,'10',22,'hard',NULL,TRUE,'H'),
+(99,'A',22,'hard',NULL,TRUE,'H');
 
 
 -- =========================================
@@ -758,16 +758,15 @@ INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, d
 (98,'10',20,'hard',NULL,TRUE,'H'),
 (98,'A',20,'hard',NULL,TRUE,'H');
 
--- AA (Spanish) encode as 12 + soft + pair; keep move 'H' as in your seed
+-- AA (same code 22; duplicate rows by design per your example)
 INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move) VALUES
-(98,'2', 12,'soft',NULL,TRUE,'H'),
-(98,'3', 12,'soft',NULL,TRUE,'H'),
-(98,'4', 12,'soft',NULL,TRUE,'H'),
-(98,'5', 12,'soft',NULL,TRUE,'H'),
-(98,'6', 12,'soft',NULL,TRUE,'H'),
-(98,'7', 12,'soft',NULL,TRUE,'H'),
-(98,'8', 12,'soft',NULL,TRUE,'H'),
-(98,'9', 12,'soft',NULL,TRUE,'H'),
-(98,'10',12,'soft',NULL,TRUE,'H'),
-(98,'A', 12,'soft',NULL,TRUE,'H');
-
+(98,'2',22,'hard',NULL,TRUE,'H'),
+(98,'3',22,'hard',NULL,TRUE,'H'),
+(98,'4',22,'hard',NULL,TRUE,'H'),
+(98,'5',22,'hard',NULL,TRUE,'H'),
+(98,'6',22,'hard',NULL,TRUE,'H'),
+(98,'7',22,'hard',NULL,TRUE,'H'),
+(98,'8',22,'hard',NULL,TRUE,'H'),
+(98,'9',22,'hard',NULL,TRUE,'H'),
+(98,'10',22,'hard',NULL,TRUE,'H'),
+(98,'A',22,'hard',NULL,TRUE,'H');
