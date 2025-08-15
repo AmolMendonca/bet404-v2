@@ -257,9 +257,9 @@ const resolveHoleModeForGrader = (holeCardChoice) => {
 const clientHoleModeFromChoice = (choice) => {
   const c = String(choice || '').trim()
   // Spanish 21
-  if (c === 'Spanish_perfect') return 'perfect'
-  if (c === 'Spanish_4to9') return '4to9'
-  if (c === 'Spanish_2to3') return '2to3'
+  if (c === 'Spanish_perfect' || c === 'perfect') return 'perfect'
+  if (c === 'Spanish_4to9' || c === '4to9')   return '4to9'
+  if (c === 'Spanish_2to3' || c === '2to3')   return '2to3'
   // Blackjack
   if (c === '4-10') return '4to10'
   if (c === '2-3') return '2to3'
