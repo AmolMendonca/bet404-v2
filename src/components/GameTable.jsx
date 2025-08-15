@@ -261,10 +261,9 @@ const clientHoleModeFromChoice = (choice) => {
   if (c === 'Spanish_4to9' || c === '4to9')   return '4to9'
   if (c === 'Spanish_2to3' || c === '2to3')   return '2to3'
   // Blackjack
-  if (c === '4-10') return '4to10'
-  if (c === '2-3') return '2to3'
-  if (c === 'perfect') return 'perfect'
-  if (c === 'A-9DAS' || c === 'A-9NoDAS') return 'Ato9'
+  if (c === '4-10' || c === '4to10')          return '4to10'
+  if (c === '2-3'  || c === '2to3')          return '2to3'
+  if (c === 'A-9DAS' || c === 'A-9NoDAS' || c === 'Ato9') return 'Ato9'
   return 'perfect'
 }
 
