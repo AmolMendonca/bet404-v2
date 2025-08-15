@@ -553,18 +553,32 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
   // double availability from settings
   const { total: pTotal, soft: pSoft } = getHandInfo(playerHand)
   const dblRule = String(doubleAllowed || '10-11').toLowerCase()
+
+  // UPDATED: remove unconditional soft block for the any rule
   let canDoubleFirstTwo = false
-  if (playerHand.length === 2 && !pSoft) {
-    if (dblRule === 'any') canDoubleFirstTwo = pTotal >= 4 && pTotal <= 21
-    else if (dblRule === '9-11') canDoubleFirstTwo = [9, 10, 11].includes(pTotal)
-    else canDoubleFirstTwo = [10, 11].includes(pTotal)
+  if (playerHand.length === 2) {
+    if (dblRule === 'any') {
+      canDoubleFirstTwo = true // any two card hand, soft or hard
+    } else if (dblRule === '9-11') {
+      canDoubleFirstTwo = !pSoft && [9, 10, 11].includes(pTotal)
+    } else {
+      // default 10-11
+      canDoubleFirstTwo = !pSoft && [10, 11].includes(pTotal)
+    }
   }
-  const dblHint =
-    dblRule === 'any'
-      ? 'Double is available on any hard total on the first two cards'
-      : dblRule === '9-11'
-        ? 'Double is available on hard 9, 10, or 11 on the first two cards'
-        : 'Double is available on hard 10 or 11 on the first two cards'
+
+  // UPDATED helper text to match the new behavior and avoid hyphens in sentences
+  const dblHint = (() => {
+    if (dblRule === 'any') {
+      return playerHand.length === 2
+        ? 'Double is available on any two card hand'
+        : 'Double is only for the first two cards'
+    }
+    if (dblRule === '9-11') {
+      return 'Double is available on hard nine, ten, or eleven on the first two cards'
+    }
+    return 'Double is available on hard ten or eleven on the first two cards'
+  })()
 
   // save settings to backend and update local
   const saveSettings = async () => {
