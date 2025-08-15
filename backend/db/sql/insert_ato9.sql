@@ -365,18 +365,19 @@ INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, d
 (103,'10',20,'hard',NULL,TRUE,'S'),
 (103,'A',20,'hard',NULL,TRUE,'S');
 
--- AA (22)
+-- AA (encode as 12 + soft + pair)
 INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move) VALUES
-(103,'2',22,'hard',NULL,TRUE,'P'),
-(103,'3',22,'hard',NULL,TRUE,'P'),
-(103,'4',22,'hard',NULL,TRUE,'P'),
-(103,'5',22,'hard',NULL,TRUE,'P'),
-(103,'6',22,'hard',NULL,TRUE,'P'),
-(103,'7',22,'hard',NULL,TRUE,'P'),
-(103,'8',22,'hard',NULL,TRUE,'P'),
-(103,'9',22,'hard',NULL,TRUE,'P'),
-(103,'10',22,'hard',NULL,TRUE,'P'),
-(103,'A',22,'hard',NULL,TRUE,'P');
+(103,'2', 12,'soft',NULL,TRUE,'P'),
+(103,'3', 12,'soft',NULL,TRUE,'P'),
+(103,'4', 12,'soft',NULL,TRUE,'P'),
+(103,'5', 12,'soft',NULL,TRUE,'P'),
+(103,'6', 12,'soft',NULL,TRUE,'P'),
+(103,'7', 12,'soft',NULL,TRUE,'P'),
+(103,'8', 12,'soft',NULL,TRUE,'P'),
+(103,'9', 12,'soft',NULL,TRUE,'P'),
+(103,'10',12,'soft',NULL,TRUE,'P'),
+(103,'A', 12,'soft',NULL,TRUE,'P');
+
 
 INSERT INTO charts (chart_id, user_id, mode)
 VALUES (104, 'test_user1', 'A-9NoDAS');
@@ -744,15 +745,15 @@ INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, d
 (104,'10', 20, 'hard', NULL, TRUE, 'S'),
 (104, 'A', 20, 'hard', NULL, TRUE, 'S');
 
--- Pair Aces (AA) -> (per your schema) player_val = 22
+-- Pair Aces (AA) -> encode as 12 + soft + pair
 INSERT INTO chart_entries (chart_id, dealer_val, player_val, player_hand_type, dealer_hand_type, player_pair, recommended_move) VALUES
-(104, '2', 22, 'hard', NULL, TRUE, 'P'),
-(104, '3', 22, 'hard', NULL, TRUE, 'P'),
-(104, '4', 22, 'hard', NULL, TRUE, 'P'),
-(104, '5', 22, 'hard', NULL, TRUE, 'P'),
-(104, '6', 22, 'hard', NULL, TRUE, 'P'),
-(104, '7', 22, 'hard', NULL, TRUE, 'P'),
-(104, '8', 22, 'hard', NULL, TRUE, 'P'),
-(104, '9', 22, 'hard', NULL, TRUE, 'P'),
-(104,'10', 22, 'hard', NULL, TRUE, 'P'),
-(104, 'A', 22, 'hard', NULL, TRUE, 'P');
+(104, '2', 12, 'soft', NULL, TRUE, 'P'),
+(104, '3', 12, 'soft', NULL, TRUE, 'P'),
+(104, '4', 12, 'soft', NULL, TRUE, 'P'),
+(104, '5', 12, 'soft', NULL, TRUE, 'P'),
+(104, '6', 12, 'soft', NULL, TRUE, 'P'),
+(104, '7', 12, 'soft', NULL, TRUE, 'P'),
+(104, '8', 12, 'soft', NULL, TRUE, 'P'),
+(104, '9', 12, 'soft', NULL, TRUE, 'P'),
+(104,'10', 12, 'soft', NULL, TRUE, 'P'),
+(104, 'A', 12, 'soft', NULL, TRUE, 'P');

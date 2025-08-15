@@ -85,11 +85,10 @@ def _dealer_val_for_4to10(dealer_up):
 def _pair_code(rank):
     """Translate a pair rank into chart's player_val code."""
     if rank == 'A':
-        return 22         # AA
+        return 12         # AA
     if rank in ('T','J','Q','K'):
         return 20         # TT
     return int(rank) * 11 # 22,33,...,99
-
 
 
 
@@ -164,6 +163,7 @@ def grade():
     # User (TODO: swap to auth/JWT later)
     # user_id = data.get('user_id') or 'test_user1'
     user_id = g.user['id']
+    # user_id = 'test_user1'
 
     # Pull user settings (surrender + H17/S17 matter in V1)
     cur.execute("""

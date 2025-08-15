@@ -6,7 +6,11 @@ from models import get_db
 new_user_bp = Blueprint("new_user", __name__)
 
 TEST_USER = "test_user1"
-VALID_MODES = {"4-10", "2-3", "perfect", "A-9DAS", "A-9NoDAS"}
+VALID_MODES = {
+    '4-10','2-3','perfect','A-9DAS','A-9NoDAS',
+    'Spanish_4to9','Spanish_2to3','Spanish_perfect'
+}
+
 
 
 @new_user_bp.post("/new_user")
