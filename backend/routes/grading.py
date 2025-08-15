@@ -155,7 +155,7 @@ def _result_payload(hole_mode, attempted, resolved, correct=None, meta=None):
 # -------------------------
 
 @grading_bp.route('/grade', methods=['POST'])
-@require_user
+#@require_user
 def grade():
     db, cur = get_db()
 
@@ -163,8 +163,8 @@ def grade():
 
     # User (TODO: swap to auth/JWT later)
     # user_id = data.get('user_id') or 'test_user1'
-    user_id = g.user['id']
-    # user_id = 'test_user1'
+    # user_id = g.user['id']
+    user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
 
     # Pull user settings (surrender + H17/S17 matter in V1)
     cur.execute("""
