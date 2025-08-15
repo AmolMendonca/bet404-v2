@@ -19,15 +19,22 @@ RANK_TO_VAL = {
 }
 TEN_SET = {'T', 'J', 'Q', 'K'}
 
+def _make_spanish_shoe(num_decks: int = 6):
+    """
+    Build a Spanish-21 shoe by taking a standard shoe and removing all 'T' cards.
+    Leaves J/Q/K intact (still worth 10). Re-shuffles after filtering.
+    """
+    shoe = _make_shoe(num_decks)
+    shoe = [c for c in shoe if c['rank'] != 'T']  # strip tens
+    random.shuffle(shoe)
+    return shoe
+
 @dealing_bp.get('/deal_newhand')
-@require_user                      # protect this route
+@require_user
 def deal_newhand():
     db, cur = get_db()
 
-    # real user from Supabase token
     user_id = g.user['id']
-    
-    print(f"user id is {user_id}")
 
     # pull settings for this user
     cur.execute("""
@@ -36,7 +43,6 @@ def deal_newhand():
         WHERE user_id = %s
     """, (user_id,))
     s = cur.fetchone()
-    print(f"settings fetched is nine other than {s}")
 
     # defaults if not found
     hole_mode         = (s['hole_card'] if s else '4-10')
@@ -45,11 +51,16 @@ def deal_newhand():
     decks_count       = int(s['decks_count'])        if s else 6
     double_first_two  = (s['double_first_two'] if s else 'any')
 
-    # force one deck for the A to 9 modes
+    # force one deck for A-9 modes (BJ), per your existing rule
     if hole_mode in ('A-9DAS', 'A-9NoDAS'):
         decks_count = 1
 
-    # deal until non trivial hand
+    # Spanish-21: force 6 decks and Spanish shoe (no 'T' cards)
+    use_spanish = hole_mode.startswith('Spanish')
+    if use_spanish:
+        decks_count = 6
+
+    # deal until non-trivial hand
     tries = 0
     MAX_TRIES = 400
     while True:
@@ -57,7 +68,7 @@ def deal_newhand():
         if tries > MAX_TRIES:
             return jsonify({"error": "could not produce a non trivial hand"}), 500
 
-        shoe = _make_shoe(decks_count)
+        shoe = _make_spanish_shoe(decks_count) if use_spanish else _make_shoe(decks_count)
 
         player_cards = [shoe.pop(), shoe.pop()]
         dealer_up    = shoe.pop()
@@ -80,12 +91,12 @@ def deal_newhand():
             break
 
     # build dealer cards payload by mode
-    if hole_mode == 'perfect':
+    if hole_mode == 'perfect' or hole_mode == 'Spanish_perfect':
         dealer_cards = [
             {'suit': dealer_up['suit'],   'rank': _to_frontend_rank(dealer_up['rank'])},
             {'suit': dealer_hole['suit'], 'rank': _to_frontend_rank(dealer_hole['rank'])},
         ]
-    elif hole_mode == '2-3':
+    elif hole_mode == '2-3' or hole_mode == 'Spanish_2to3':
         dealer_cards = [
             {'suit': dealer_up['suit'], 'rank': _to_frontend_rank(dealer_up['rank'])},
             {'hole_bucket': '2-3'}
@@ -94,6 +105,11 @@ def deal_newhand():
         dealer_cards = [
             {'suit': dealer_up['suit'], 'rank': _to_frontend_rank(dealer_up['rank'])},
             {'hole_bucket': '4-10'}
+        ]
+    elif hole_mode == 'Spanish_4to9':
+        dealer_cards = [
+            {'suit': dealer_up['suit'], 'rank': _to_frontend_rank(dealer_up['rank'])},
+            {'hole_bucket': '4-9'}
         ]
     elif hole_mode == 'A-9DAS':
         dealer_cards = [
@@ -117,8 +133,6 @@ def deal_newhand():
         {'suit': player_cards[1]['suit'], 'rank': _to_frontend_rank(player_cards[1]['rank'])},
     ]
 
-    print(f"The decks count is nothing but {decks_count}")
-
     return jsonify({
         'player_cards': player_cards_out,
         'dealer_cards': dealer_cards,
@@ -126,7 +140,7 @@ def deal_newhand():
             'hole_mode':         hole_mode,
             'surrender_allowed': surrender_allowed,
             'soft17_hit':        soft17_hit,
-            'decks_count':       decks_count,
+            'decks_count':       decks_count,   # will be 6 for Spanish, 1 for A-9, else user's setting
             'double_first_two':  double_first_two
         }
     })
