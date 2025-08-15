@@ -45,6 +45,7 @@ Errors: 400 (bad input), 404 (chart/entry not found)
 from flask import Blueprint, request, jsonify, g
 from auth import require_user
 from models import get_db
+import re
 
 edits_bp = Blueprint("edits", __name__)
 
@@ -176,3 +177,205 @@ def update_chart_cell():
         "new_move": new_move,
         "changed": changed
     }), 200
+
+PERFECT_MODES = {"perfect", "Spanish_perfect"}
+
+# ---------- validators ----------
+
+_NUM_12_20 = re.compile(r"^(1[2-9]|20)$")
+_NUMNUM_12_20 = re.compile(r"^(1[2-9]|20)/(1[2-9]|20)$")  # allow slash variant too
+
+def _valid_hit_value(s: str) -> bool:
+    """Accept a single number 12..20 OR N/M both 12..20 (to support H17/S17 variants)."""
+    if not s: return False
+    s = s.strip()
+    return bool(_NUM_12_20.fullmatch(s) or _NUMNUM_12_20.fullmatch(s))
+
+_DH = re.compile(r"^([2-9]|1[01])-([2-9]|1[01])$")  # 2-11
+
+def _valid_double_hards(s: str) -> bool:
+    """Range x-y with 2<=x<=y<=11."""
+    if not s: return False
+    m = _DH.fullmatch(s.strip())
+    if not m: return False
+    x, y = int(m.group(1)), int(m.group(2))
+    return x <= y
+
+_DS_SINGLE = re.compile(r"^A([2-9])-A([2-9])$")
+_DS_DUAL   = re.compile(r"^A([2-9])-A([2-9])/A([2-9])-A([2-9])$")
+
+def _valid_double_softs(s: str) -> bool:
+    """
+    Accept 'AX-AY' where 2<=X<=Y<=9, or two such ranges separated by '/' (supports H17/S17 style).
+    """
+    if not s: return False
+    s = s.strip()
+    m1 = _DS_SINGLE.fullmatch(s)
+    if m1:
+        x, y = int(m1.group(1)), int(m1.group(2))
+        return x <= y
+    m2 = _DS_DUAL.fullmatch(s)
+    if m2:
+        x1, y1, x2, y2 = map(int, m2.groups())
+        return (x1 <= y1) and (x2 <= y2)
+    return False
+
+SPLIT_ORDER = {ch:i for i, ch in enumerate(list("A23456789T"), start=1)}
+_SPLIT_TOKEN = re.compile(r"^[A23456789T]+$")
+
+def _is_strictly_ascending(token: str) -> bool:
+    """All chars in allowed set, no dups, strictly increasing A<2<...<9<T."""
+    if not _SPLIT_TOKEN.fullmatch(token):
+        return False
+    seen = set()
+    prev_rank = 0
+    for ch in token:
+        if ch in seen: return False
+        seen.add(ch)
+        rank = SPLIT_ORDER[ch]
+        if rank <= prev_rank: return False
+        prev_rank = rank
+    return True
+
+def _valid_splits(s: str) -> bool:
+    """
+    A single ascending token like 'A234' or 'A89' OR two tokens with '/' (supporting H17/S17 form).
+    """
+    if not s: return False
+    s = s.strip().upper()
+    if "/" in s:
+        left, right = s.split("/", 1)
+        return _is_strictly_ascending(left) and _is_strictly_ascending(right)
+    return _is_strictly_ascending(s)
+
+def _norm_dealer_val_for_perfect(v):
+    """
+    Accept numeric 4..20 (int or str), or 'A2','A3','A4','A5','A6','AA' (case-insensitive).
+    """
+    if v is None:
+        raise ValueError("dealer_val missing")
+    s = str(v).strip().upper()
+    if s.isdigit():
+        n = int(s)
+        if 4 <= n <= 20:
+            return str(n)
+        raise ValueError("dealer_val numeric must be between 4 and 20")
+    if s in {"A2","A3","A4","A5","A6","AA"}:
+        return s
+    raise ValueError(f"invalid dealer_val '{v}'")
+
+_ALLOWED_COLS = {"hit_until_hard","hit_until_soft","double_hards","double_softs","splits"}
+
+def _validate_value(col: str, new_val: str) -> bool:
+    if col == "hit_until_hard" or col == "hit_until_soft":
+        return _valid_hit_value(new_val)
+    if col == "double_hards":
+        return _valid_double_hards(new_val)
+    if col == "double_softs":
+        return _valid_double_softs(new_val)
+    if col == "splits":
+        return _valid_splits(new_val)
+    return False
+
+@edits_bp.post("/chart/update_perfect_cell")
+# @require_user
+def update_perfect_cell():
+    """
+    POST /api/chart/update_perfect_cell — Edit a single PERFECT chart cell (perfect or Spanish_perfect).
+
+    Request JSON:
+    {
+      "mode": "perfect" | "Spanish_perfect",
+      "dealer_val": "20".."4" | "A2"|"A3"|"A4"|"A5"|"A6"|"AA",
+      "col": "hit_until_hard" | "hit_until_soft" | "double_hards" | "double_softs" | "splits",
+      "new_val": "<validated string per column rules>"
+    }
+
+    Rules:
+      - hit_until_*:           a number 12..20, OR "N/M" with both 12..20
+      - double_hards:          "x-y" where 2<=x<=y<=11   (e.g., "9-11", "11-11")
+      - double_softs:          "AX-AY" (2..9), or "AX-AY/AX-AY" (both valid)
+      - splits:                ascending token like "A234" or "A89" or "A236789",
+                               optionally "token/token" for dual-rule variants
+      - Surrender fields (late_surrender_* / forfeits) are NOT editable here.
+
+    Success:
+    {
+      "ok": true,
+      "mode": "...",
+      "chart_id": 97,
+      "dealer_val": "A6",
+      "col": "double_hards",
+      "old_val": "10-11",
+      "new_val": "9-11",
+      "changed": true
+    }
+    """
+    data = request.get_json(silent=True) or {}
+
+    mode = (data.get("mode") or "").strip()
+    if mode not in PERFECT_MODES:
+        return jsonify({"ok": False, "error": "invalid or missing mode (perfect | Spanish_perfect)"}), 400
+
+    try:
+        dealer_val = _norm_dealer_val_for_perfect(data.get("dealer_val"))
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    col = (data.get("col") or "").strip()
+    if col not in _ALLOWED_COLS:
+        return jsonify({"ok": False, "error": f"invalid or disallowed column '{col}'"}), 400
+
+    new_val = (data.get("new_val") or "").strip().upper()
+    if not _validate_value(col, new_val):
+        return jsonify({"ok": False, "error": f"new_val invalid for column '{col}'"}), 400
+
+    db, cur = get_db()
+    # user_id = g.user["id"]
+    user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
+
+    # Find user's perfect chart_id for this mode
+    cur.execute("""
+        SELECT chart_id
+        FROM charts
+        WHERE user_id = %s AND mode = %s
+        ORDER BY chart_id DESC
+        LIMIT 1;
+    """, (user_id, mode))
+    row = cur.fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": f"no {mode} chart found for user"}), 404
+    chart_id = row["chart_id"]
+
+    # Fetch existing value
+    cur.execute(f"""
+        SELECT {col} AS val
+        FROM perfect_entries
+        WHERE chart_id = %s AND dealer_val = %s
+        LIMIT 1;
+    """, (chart_id, dealer_val))
+    r = cur.fetchone()
+    if not r:
+        return jsonify({"ok": False, "error": "perfect chart row not found for given dealer_val"}), 404
+
+    old_val = (r["val"] or "")
+    changed = (old_val.strip().upper() != new_val)
+
+    if changed:
+        cur.execute(f"""
+            UPDATE perfect_entries
+            SET {col} = %s
+            WHERE chart_id = %s AND dealer_val = %s
+        """, (new_val, chart_id, dealer_val))
+        db.commit()
+
+    return jsonify({
+        "ok": True,
+        "mode": mode,
+        "chart_id": chart_id,
+        "dealer_val": dealer_val,
+        "col": col,
+        "old_val": old_val,
+        "new_val": new_val,
+        "changed": changed
+    }), 200 

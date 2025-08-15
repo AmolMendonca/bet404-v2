@@ -1,4 +1,4 @@
-​​import React, { useMemo, useState, useEffect, useRef } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useAuth } from './hooks/useAuth'
 import GameTable from './components/GameTable'
