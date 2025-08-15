@@ -303,6 +303,9 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
   const [decksCount, setDecksCount] = useState(Number.isFinite(settings?.decks_count) ? settings.decks_count : 6)
   const [doubleAllowed, setDoubleAllowed] = useState(settings?.double_first_two || '10-11')
 
+  // Determine if this is Spanish 21 based on settings
+  const isSpanish21 = settings?.game_type === 'spanish21'
+
   useEffect(() => {
     // sync with parent settings if they change
     setHoleCardChoice(choiceFromClientHoleMode(settings?.hole_mode || clientHoleModeFromChoice(mode)))
@@ -594,8 +597,16 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
 
   const disableDecks = holeCardChoice === 'A-9DAS' || holeCardChoice === 'A-9NoDAS'
 
+  // FIXED: Dynamic background classes based on game type
+  const getBackgroundClasses = () => {
+    if (isSpanish21) {
+      return 'bg-gradient-to-br from-red-900 via-red-800 to-black'
+    }
+    return 'bg-gradient-to-br from-green-800 via-green-900 to-black'
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-900 to-black">
+    <div className={`min-h-screen ${getBackgroundClasses()}`}>
       <div className="absolute inset-0 opacity-10">
         <div className="absolute inset-0 bg-[repeating-conic-gradient(from_0deg_at_50%_50%,transparent_0deg,rgba(255,255,255,0.1)_20deg,transparent_40deg)]"></div>
       </div>
@@ -608,7 +619,10 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
           </button>
           <div className="flex items-center space-x-6">
             <div className="text-white">
-              <span className="text-sm text-white/60">Hole Card: </span>
+              <span className="text-sm text-white/60">
+                {isSpanish21 ? 'Spanish 21 • ' : ''}
+                Hole Card: 
+              </span>
               <span className="font-semibold">{holeCardChoice}</span>
             </div>
             <button onClick={() => setShowSettings(true)} className="text-white/60 hover:text-white transition-colors">

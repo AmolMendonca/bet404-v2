@@ -793,6 +793,8 @@ function BlackjackSettings({ onStart, onBack }) {
 
 /* --------------------------- Spanish 21 settings UI -------------------------- */
 
+// In your App.jsx, update the Spanish21Settings function:
+
 function Spanish21Settings({ onStart, onBack }) {
   const [holeCard, setHoleCard] = useState('perfect') // perfect, 4-9, 2-3
   const [surrenderAllowed, setSurrenderAllowed] = useState('yes') // yes or no
@@ -800,7 +802,7 @@ function Spanish21Settings({ onStart, onBack }) {
   const [doubleAllowed, setDoubleAllowed] = useState('any') // any, 9-11, 10-11
 
   const settings = useMemo(() => ({
-    game_type: 'spanish21',
+    game_type: 'spanish21', // ← This is the key line that was missing!
     hole_mode: holeCard === '4-9' ? '4to9' : holeCard === '2-3' ? '2to3' : 'perfect',
     surrender_allowed: surrenderAllowed === 'yes',
     soft17_hit: soft17Hit === 'true',
@@ -819,9 +821,9 @@ function Spanish21Settings({ onStart, onBack }) {
               value={holeCard}
               onChange={(e)=>setHoleCard(e.target.value)}
             >
-              <option>Perfect</option>
-              <option>4-9</option>
-              <option>2-3</option>
+              <option value="perfect">Perfect</option>
+              <option value="4-9">4-9</option>
+              <option value="2-3">2-3</option>
             </select>
           </div>
 
