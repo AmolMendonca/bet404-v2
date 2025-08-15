@@ -11,6 +11,7 @@ from routes.grading import grading_bp
 from routes.settings import settings_bp
 from routes.defaults import new_user_bp
 from routes.stats import stats_bp
+from routes.edits import edits_bp
 
 from routes.auth_routes import auth_bp   # new
 
@@ -42,6 +43,7 @@ def create_app():
     app.register_blueprint(settings_bp, url_prefix='/api')
     app.register_blueprint(new_user_bp, url_prefix='/api')
     app.register_blueprint(stats_bp, url_prefix='/api')
+    app.register_blueprint(edits_bp, url_prefix='/api')
     return app
 
 if __name__ == '__main__':
