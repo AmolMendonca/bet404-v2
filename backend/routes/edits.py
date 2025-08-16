@@ -60,7 +60,7 @@ ALLOWED_MOVES = {
     # macros
     "DS", "DH", "DP", "RH", "RS", "RP",
     # split H17/S17 style or composite tokens seen in seeds
-    "RH/H", "RS/H", "S/H", "H/S", "D/H", "P/H", "P/S", "H/P",
+    "RH/H", "RS/H", "S/H", "H/S", "D/H", "P/H", "P/S", "H/P", "RH/PRH", "RP/H", "D/S", "RH/P",
     # extras you mentioned
     "PRH", "RPH",
 }
