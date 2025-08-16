@@ -163,8 +163,8 @@ def grade():
 
     # User (TODO: swap to auth/JWT later)
     # user_id = data.get('user_id') or 'test_user1'
-    # user_id = g.user['id']
-    user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
+    user_id = g.user['id']
+    # user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
 
     # Pull user settings (surrender + H17/S17 matter in V1)
     cur.execute("""
