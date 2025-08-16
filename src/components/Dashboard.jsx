@@ -83,10 +83,10 @@ function LoginScreen() {
             <span className="text-white font-semibold text-lg">H</span>
           </div>
           <h1 className="text-2xl font-medium text-gray-900 mb-2">
-            {isSignUp ? 'Create Account' : 'bet404'}
+            {isSignUp ? 'Create Account' : 'bet404 Games'}
           </h1>
           <p className="text-gray-500 text-sm">
-            {isSignUp ? 'Sign up to get started' : 'Professional blackjack training'}
+            {isSignUp ? 'Sign up to get started' : 'Professional Advantage-Play training'}
           </p>
         </div>
 
