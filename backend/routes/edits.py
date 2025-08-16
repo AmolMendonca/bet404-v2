@@ -278,7 +278,7 @@ def _validate_value(col: str, new_val: str) -> bool:
     return False
 
 @edits_bp.post("/chart/update_perfect_cell")
-# @require_user
+@require_user
 def update_perfect_cell():
     """
     POST /api/chart/update_perfect_cell — Edit a single PERFECT chart cell (perfect or Spanish_perfect).
@@ -331,8 +331,8 @@ def update_perfect_cell():
         return jsonify({"ok": False, "error": f"new_val invalid for column '{col}'"}), 400
 
     db, cur = get_db()
-    # user_id = g.user["id"]
-    user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
+    user_id = g.user["id"]
+    # user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
 
     # Find user's perfect chart_id for this mode
     cur.execute("""
