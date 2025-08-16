@@ -182,45 +182,106 @@ PERFECT_MODES = {"perfect", "Spanish_perfect"}
 
 # ---------- validators ----------
 
+# hit_until_*  (supports single N or dual "N/M")
 _NUM_12_20 = re.compile(r"^(1[2-9]|20)$")
 _NUMNUM_12_20 = re.compile(r"^(1[2-9]|20)/(1[2-9]|20)$")  # allow slash variant too
 
 def _valid_hit_value(s: str) -> bool:
     """Accept a single number 12..20 OR N/M both 12..20 (to support H17/S17 variants)."""
-    if not s: return False
+    if not s:
+        return False
     s = s.strip()
     return bool(_NUM_12_20.fullmatch(s) or _NUMNUM_12_20.fullmatch(s))
 
-_DH = re.compile(r"^([2-9]|1[01])-([2-9]|1[01])$")  # 2-11
+# --- double-* validators (flexible, slash-aware) ---
+
+def _valid_int_or_range(token: str, lo: int, hi: int) -> bool:
+    """
+    Accepts a single int within [lo,hi] or a range 'x-y' with lo <= x <= y <= hi.
+    """
+    t = (token or "").strip()
+    if "-" in t:
+        a, b = t.split("-", 1)
+        if not (a.isdigit() and b.isdigit()):
+            return False
+        a, b = int(a), int(b)
+        return lo <= a <= b <= hi
+    return t.isdigit() and lo <= int(t) <= hi
+
+def _parse_soft_rank_token(ax: str):
+    """
+    ax: 'A2'..'A9', 'AT' or 'A10'  -> returns int 2..10, or None if invalid.
+    """
+    if not ax:
+        return None
+    s = ax.strip().upper()
+    if not s.startswith("A"):
+        return None
+    tail = s[1:]
+    if tail == "T" or tail == "10":
+        return 10
+    if tail.isdigit():
+        n = int(tail)
+        return n if 2 <= n <= 9 else None
+    return None
+
+def _valid_soft_token(tok: str) -> bool:
+    """
+    One side of double_softs can be:
+      - 'NONE'
+      - 'AX'              (A2..A9, AT/A10)
+      - 'AX-AY'           (2 <= X <= Y <= 10)
+    """
+    if tok is None:
+        return False
+    t = tok.strip().upper()
+    if t == "NONE":
+        return True
+    if "-" in t:
+        # range form
+        left, right = t.split("-", 1)
+        if not (left.startswith("A") and right.startswith("A")):
+            return False
+        x = _parse_soft_rank_token(left)
+        y = _parse_soft_rank_token(right)
+        return (x is not None) and (y is not None) and (x <= y)
+    # single AX
+    if t.startswith("A"):
+        return _parse_soft_rank_token(t) is not None
+    return False
 
 def _valid_double_hards(s: str) -> bool:
-    """Range x-y with 2<=x<=y<=11."""
-    if not s: return False
-    m = _DH.fullmatch(s.strip())
-    if not m: return False
-    x, y = int(m.group(1)), int(m.group(2))
-    return x <= y
-
-_DS_SINGLE = re.compile(r"^A([2-9])-A([2-9])$")
-_DS_DUAL   = re.compile(r"^A([2-9])-A([2-9])/A([2-9])-A([2-9])$")
+    """
+    Accept:
+      - single int or range: '9-11' or '11'
+      - slash form mixing range/int on each side: '10-11/11', '9/10-11', '11/11'
+    """
+    if not s:
+        return False
+    s = s.strip().upper()
+    if "/" in s:
+        left, right = s.split("/", 1)
+        return _valid_int_or_range(left, 2, 11) and _valid_int_or_range(right, 2, 11)
+    return _valid_int_or_range(s, 2, 11)
 
 def _valid_double_softs(s: str) -> bool:
     """
-    Accept 'AX-AY' where 2<=X<=Y<=9, or two such ranges separated by '/' (supports H17/S17 style).
+    Accept:
+      - single: 'AX' or 'AX-AY' (A2..A9, AT/A10)
+      - slash form: '<token>/<token>' where each token is:
+            'NONE' | 'AX' | 'AX-AY'
+        Examples: 'A3-A8', 'A7', 'A3-A4/A2-A9', 'A7/A7', 'A7/NONE', 'NONE/A8', 'NONE/NONE', 'A2-AT'
     """
-    if not s: return False
-    s = s.strip()
-    m1 = _DS_SINGLE.fullmatch(s)
-    if m1:
-        x, y = int(m1.group(1)), int(m1.group(2))
-        return x <= y
-    m2 = _DS_DUAL.fullmatch(s)
-    if m2:
-        x1, y1, x2, y2 = map(int, m2.groups())
-        return (x1 <= y1) and (x2 <= y2)
-    return False
+    if not s:
+        return False
+    t = s.strip().upper()
+    if "/" in t:
+        left, right = t.split("/", 1)
+        return _valid_soft_token(left) and _valid_soft_token(right)
+    return _valid_soft_token(t)
 
-SPLIT_ORDER = {ch:i for i, ch in enumerate(list("A23456789T"), start=1)}
+# splits (ascending, optional slash)
+SPLIT_ORDER = {ch: i for i, ch in enumerate(list("A23456789T"), start=1)}
 _SPLIT_TOKEN = re.compile(r"^[A23456789T]+$")
 
 def _is_strictly_ascending(token: str) -> bool:
@@ -230,10 +291,12 @@ def _is_strictly_ascending(token: str) -> bool:
     seen = set()
     prev_rank = 0
     for ch in token:
-        if ch in seen: return False
+        if ch in seen:
+            return False
         seen.add(ch)
         rank = SPLIT_ORDER[ch]
-        if rank <= prev_rank: return False
+        if rank <= prev_rank:
+            return False
         prev_rank = rank
     return True
 
@@ -241,7 +304,8 @@ def _valid_splits(s: str) -> bool:
     """
     A single ascending token like 'A234' or 'A89' OR two tokens with '/' (supporting H17/S17 form).
     """
-    if not s: return False
+    if not s:
+        return False
     s = s.strip().upper()
     if "/" in s:
         left, right = s.split("/", 1)
@@ -260,75 +324,12 @@ def _norm_dealer_val_for_perfect(v):
         if 4 <= n <= 20:
             return str(n)
         raise ValueError("dealer_val numeric must be between 4 and 20")
-    if s in {"A2","A3","A4","A5","A6","AA"}:
+    if s in {"A2", "A3", "A4", "A5", "A6", "AA"}:
         return s
     raise ValueError(f"invalid dealer_val '{v}'")
 
-_ALLOWED_COLS = {"hit_until_hard","hit_until_soft","double_hards","double_softs","splits"}
+_ALLOWED_COLS = {"hit_until_hard", "hit_until_soft", "double_hards", "double_softs", "splits"}
 
-def _validate_value(col: str, new_val: str) -> bool:
-    if col == "hit_until_hard" or col == "hit_until_soft":
-        return _valid_hit_value(new_val)
-    if col == "double_hards":
-        return _valid_double_hards(new_val)
-    if col == "double_softs":
-        return _valid_double_softs(new_val)
-    if col == "splits":
-        return _valid_splits(new_val)
-    return False
-
-# ---- replace the double_* validators with these helpers ----
-def _valid_int_or_range(token: str, lo: int, hi: int) -> bool:
-    t = (token or "").strip()
-    if "-" in t:
-        a, b = t.split("-", 1)
-        if not (a.isdigit() and b.isdigit()):
-            return False
-        a, b = int(a), int(b)
-        return lo <= a <= b <= hi
-    return t.isdigit() and lo <= int(t) <= hi
-
-def _valid_Aint_or_Arange(token: str) -> bool:
-    t = (token or "").strip().upper()
-    if not t.startswith("A"):
-        return False
-    body = t[1:]
-    if "-" in body:
-        a, b = body.split("-", 1)
-        if not (a.isdigit() and b.isdigit()):
-            return False
-        a, b = int(a), int(b)
-        return 2 <= a <= b <= 9
-    return body.isdigit() and 2 <= int(body) <= 9
-
-def _valid_double_hards(s: str) -> bool:
-    """
-    Accept:
-      - single range or int: '9-11' or '11'
-      - slash form mixing range/int on each side: '10-11/11', '9/10-11', '11/11', etc.
-    """
-    if not s: return False
-    s = s.strip().upper()
-    if "/" in s:
-        left, right = s.split("/", 1)
-        return _valid_int_or_range(left, 2, 11) and _valid_int_or_range(right, 2, 11)
-    return _valid_int_or_range(s, 2, 11)
-
-def _valid_double_softs(s: str) -> bool:
-    """
-    Accept:
-      - single soft range or int: 'A4-A7' or 'A7'
-      - slash form mixing range/int on each side: 'A4-A7/A7', 'A7/A5-A8', 'A7/A7', etc.
-    """
-    if not s: return False
-    s = s.strip().upper()
-    if "/" in s:
-        left, right = s.split("/", 1)
-        return _valid_Aint_or_Arange(left) and _valid_Aint_or_Arange(right)
-    return _valid_Aint_or_Arange(s)
-
-# keep _valid_hit_value, _valid_splits, _norm_dealer_val_for_perfect, _ALLOWED_COLS, and _validate_value() as before,
-# but ensure _validate_value() calls the updated _valid_double_hards/_valid_double_softs.
 def _validate_value(col: str, new_val: str) -> bool:
     if col in ("hit_until_hard", "hit_until_soft"):
         return _valid_hit_value(new_val)
@@ -356,10 +357,10 @@ def update_perfect_cell():
 
     Rules:
       - hit_until_*:           a number 12..20, OR "N/M" with both 12..20
-      - double_hards:          "x-y" where 2<=x<=y<=11   (e.g., "9-11", "11-11")
-      - double_softs:          "AX-AY" (2..9), or "AX-AY/AX-AY" (both valid)
-      - splits:                ascending token like "A234" or "A89" or "A236789",
-                               optionally "token/token" for dual-rule variants
+      - double_hards:          int or "x-y" in 2..11, or slash form mixing both (e.g., "10-11/11")
+      - double_softs:          'AX' or 'AX-AY' (A2..A9, AT/A10), or slash form mixing tokens;
+                               each side can also be 'NONE' (e.g., "A7/NONE", "NONE/NONE")
+      - splits:                ascending token like "A234" or "A89" (or "token/token" for dual-rule)
       - Surrender fields (late_surrender_* / forfeits) are NOT editable here.
 
     Success:
