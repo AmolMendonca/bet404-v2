@@ -155,7 +155,7 @@ def _result_payload(hole_mode, attempted, resolved, correct=None, meta=None):
 # -------------------------
 
 @grading_bp.route('/grade', methods=['POST'])
-#@require_user
+@require_user
 def grade():
     db, cur = get_db()
 
