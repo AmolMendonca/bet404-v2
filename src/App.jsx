@@ -1217,8 +1217,8 @@ function StrategyChartPage({ onBack }) {
               {/* helper text varies by column */}
               <p className="text-xs text-gray-600 mb-3">
                 {editCtxRef.current?.col === 'double_hards' && "Enter 2–11, a range like 9-11, or combine with '/' where each side is a number, a range, or 'None'. Leave empty to clear."}
-                {editCtxRef.current?.col === 'double_softs' && "Enter A2–AT (AT = A10). Each side of '/' can be 'None', a single value or range, or up to two values/ranges (separated by space or comma). Examples: A2-A5/None, A3-A10/A4-A6, A2-A10/A4. Leave empty to clear."}
-                {editCtxRef.current?.col === 'splits' && "Enter ascending ranks using A23456789T (10 is allowed as T). Use '/' to provide two sides or 'None'. Examples: A2346789T, A, None, A23789/A236789, A8, A78/A8."}
+                {editCtxRef.current?.col === 'double_softs' && "Enter A2–AT (AT = A10). Each side of '/' can be 'None', a single value or range, or up to two values or ranges. Leave empty to clear."}
+                {editCtxRef.current?.col === 'splits' && "Enter ascending ranks using A23456789T, ten can be written as T. Use '/' to provide two sides or 'None'."}
                 {(editCtxRef.current?.col === 'hit_until_hard' || editCtxRef.current?.col === 'hit_until_soft') && "Enter 12–20 or N/M with each 12–20."}
               </p>
 
@@ -1232,9 +1232,9 @@ function StrategyChartPage({ onBack }) {
                     col === 'double_hards'
                       ? raw.replace(/[^0-9A-Za-z/ \-]/g,'') // allow letters for 'None'
                       : col === 'double_softs'
-                        ? raw.replace(/[^0-9A-Za-z/ ,\-]/g,'') // allow A/T/N/O/E etc
+                        ? raw.replace(/[^0-9A-Za-z/ ,\-]/g,'')
                         : col === 'splits'
-                          ? raw.replace(/[^0-9A-Za-z/]/g,'') // allow A..Z, digits (for '10'), and '/'
+                          ? raw.replace(/[^0-9A-Za-z/]/g,'')
                           : raw.replace(/[^0-9/ ]/g,'')
                   setEditVal(sanitized)
                 }}
@@ -1891,7 +1891,7 @@ function AboutPage({ onBack }) {
               </div>
               <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg px-3 py-2 border border-red-200">
                 <div className="text-xs font-medium text-red-900">Spanish Perfect</div>
-                <div className="text-xs text-red-700">True Spanish shoe (48 cards, Tens removed) • Fixed 6 decks</div>
+                <div className="text-xs text-red-700">True Spanish shoe, Tens removed</div>
               </div>
             </div>
           </div>
@@ -1899,21 +1899,21 @@ function AboutPage({ onBack }) {
 
         {/* Perfect Mode Details */}
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-5">
-          <h3 className="font-medium text-blue-900 mb-3 flex items-center">
+          <h3 className="text-medium font-medium text-blue-900 mb-3 flex items-center">
             <div className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center mr-2">
               <span className="text-xs">✓</span>
             </div>
             Perfect Mode Grading
           </h3>
           <p className="text-sm text-blue-800 leading-relaxed mb-3">
-            In all "perfect" modes, dealer totals are computed from the actual up-card and down-card, 
-            and grading follows the established priority order:
+            In all perfect modes, dealer totals come from the actual up card and down card, 
+            and grading follows this order
           </p>
           <div className="flex flex-wrap gap-2">
             <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">1. Split</span>
             <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">2. Surrender</span>
             <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">3. Double</span>
-            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">4. Hit/Stand</span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">4. Hit or Stand</span>
           </div>
         </div>
 
@@ -1945,7 +1945,7 @@ function AboutPage({ onBack }) {
               <span className="text-blue-600 text-sm">💾</span>
             </div>
             <div className="text-xs font-medium text-gray-900">Persistent Data</div>
-            <div className="text-xs text-gray-600 mt-1">Cross-session saves</div>
+            <div className="text-xs text-gray-600 mt-1">Cross session saves</div>
           </div>
         </div>
 
@@ -1953,7 +1953,7 @@ function AboutPage({ onBack }) {
         <div className="bg-black text-white rounded-xl p-5 text-center">
           <h3 className="font-semibold mb-2">Ready to master advantage play?</h3>
           <p className="text-gray-300 text-sm mb-4">
-            Train like a pro with high-fidelity hole-card scenarios
+            Train like a pro with high-fidelity hole card scenarios
           </p>
           <button 
             onClick={() => onBack('settings')}
@@ -1988,6 +1988,316 @@ function SettingsPage({ onBack }) {
 }
 
 
+/* --------------------------- Skeletal Instructions --------------------------- */
+
+function InstructionsPage({ onBack }) {
+  const [expandedSection, setExpandedSection] = React.useState(null)
+
+  const toggleSection = (section) => {
+    setExpandedSection(expandedSection === section ? null : section)
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="Instructions" onGo={onBack} showBack />
+      <main className="px-4 py-6 max-w-2xl mx-auto space-y-6">
+        {/* Hero Section */}
+        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white rounded-2xl p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="relative">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm">
+              <span className="text-white font-bold text-lg">📚</span>
+            </div>
+            <h1 className="text-2xl font-bold mb-2">How to Use Bet404</h1>
+            <p className="text-indigo-100 text-sm leading-relaxed">
+              Master advantage play with professional hole-carding training
+            </p>
+          </div>
+        </div>
+
+        {/* Quick Start */}
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center mb-4">
+            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-green-600 text-sm">🚀</span>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">Quick Start</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gray-50 rounded-lg p-4 text-center">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <span className="text-blue-600 font-bold">1</span>
+              </div>
+              <h3 className="font-medium text-gray-900 mb-1">Choose Game</h3>
+              <p className="text-xs text-gray-600">Select Blackjack or Spanish 21 from Settings</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-4 text-center">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <span className="text-blue-600 font-bold">2</span>
+              </div>
+              <h3 className="font-medium text-gray-900 mb-1">Configure Rules</h3>
+              <p className="text-xs text-gray-600">Set hole card mode, surrender, soft 17, decks</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-4 text-center">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <span className="text-blue-600 font-bold">3</span>
+              </div>
+              <h3 className="font-medium text-gray-900 mb-1">Start Training</h3>
+              <p className="text-xs text-gray-600">Press Start to begin your session</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Rules & Settings */}
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => toggleSection('rules')}
+            className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-orange-600 text-sm">⚙️</span>
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">Rules & Settings</h2>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedSection === 'rules' ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {expandedSection === 'rules' && (
+            <div className="px-6 pb-6 space-y-4">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Per-hand and per-user options allow training against specific table conditions:
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="font-medium text-blue-900 mb-2">Dealer Soft 17</h3>
+                  <p className="text-sm text-blue-800">Toggle H17 / S17 at the hand level</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-4">
+                  <h3 className="font-medium text-red-900 mb-2">Surrender</h3>
+                  <p className="text-sm text-red-800">Enable/disable late surrender</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4">
+                  <h3 className="font-medium text-green-900 mb-2">Double Availability</h3>
+                  <p className="text-sm text-green-800">Any, 9-10, 10-11, or 9-11 on first two cards</p>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h3 className="font-medium text-purple-900 mb-2">Deck Count</h3>
+                  <p className="text-sm text-purple-800">Selectable for Blackjack (Spanish 21 uses fixed 6-deck)</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Chart Editing */}
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => toggleSection('charts')}
+            className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-purple-600 text-sm">📊</span>
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">Chart Editing</h2>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedSection === 'charts' ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {expandedSection === 'charts' && (
+            <div className="px-6 pb-6 space-y-6">
+              <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
+                <h3 className="font-medium text-yellow-900 mb-2">⚠️ Important</h3>
+                <p className="text-sm text-yellow-800">
+                  All charts are user-specific. Defaults are initialized to game-theory-optimal (GTO) for each module; 
+                  your edits override those defaults immediately and grading will use your chart.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900">Non-Perfect Modes (Cell-by-Cell)</h3>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-800 mb-2">Covered Modes:</h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="font-medium">Blackjack:</span> 4-10, 2-3, A-9 (DAS), A-9 (NoDAS)
+                    </div>
+                    <div>
+                      <span className="font-medium">Spanish 21:</span> Spanish_4to9, Spanish_2to3
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h4 className="font-medium text-blue-900 mb-2">Atomic Actions</h4>
+                    <div className="space-y-1 text-sm text-blue-800">
+                      <div><span className="font-mono bg-blue-200 px-1 rounded">H</span> Hit</div>
+                      <div><span className="font-mono bg-blue-200 px-1 rounded">S</span> Stand</div>
+                      <div><span className="font-mono bg-blue-200 px-1 rounded">D</span> Double</div>
+                      <div><span className="font-mono bg-blue-200 px-1 rounded">P</span> Split</div>
+                      <div><span className="font-mono bg-blue-200 px-1 rounded">R</span> Surrender</div>
+                    </div>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h4 className="font-medium text-green-900 mb-2">Smart Macros</h4>
+                    <div className="space-y-1 text-sm text-green-800">
+                      <div><span className="font-mono bg-green-200 px-1 rounded">DS</span> Double, else Stand</div>
+                      <div><span className="font-mono bg-green-200 px-1 rounded">DH</span> Double, else Hit</div>
+                      <div><span className="font-mono bg-green-200 px-1 rounded">RH</span> Surrender, else Hit</div>
+                      <div><span className="font-mono bg-green-200 px-1 rounded">RS</span> Surrender, else Stand</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 rounded-lg p-4">
+                  <h4 className="font-medium text-indigo-900 mb-2">H17/S17 Split Tokens</h4>
+                  <p className="text-sm text-indigo-800 mb-2">Use slash notation for rule-dependent actions:</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-indigo-700">
+                    <div><span className="font-mono bg-indigo-200 px-1 rounded">RH/H</span> H17: Surrender, S17: Hit</div>
+                    <div><span className="font-mono bg-indigo-200 px-1 rounded">S/H</span> H17: Stand, S17: Hit</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900">Perfect Modes (Row-by-Row)</h3>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm text-gray-700 mb-3">
+                    In Perfect modes, you edit one row per dealer total with five columns:
+                  </p>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="bg-white rounded p-3 border border-gray-200">
+                      <h4 className="font-medium text-gray-800 text-sm">hit_until_hard</h4>
+                      <p className="text-xs text-gray-600">Format: 12-20 or N/M split. Hit while total &lt; N; Stand at ≥ N</p>
+                    </div>
+                    <div className="bg-white rounded p-3 border border-gray-200">
+                      <h4 className="font-medium text-gray-800 text-sm">hit_until_soft</h4>
+                      <p className="text-xs text-gray-600">Same as above, but for soft totals (A + non-Ace)</p>
+                    </div>
+                    <div className="bg-white rounded p-3 border border-gray-200">
+                      <h4 className="font-medium text-gray-800 text-sm">double_hards</h4>
+                      <p className="text-xs text-gray-600">Single integer (11), range (9-11), or H17/S17 split (10-11/11)</p>
+                    </div>
+                    <div className="bg-white rounded p-3 border border-gray-200">
+                      <h4 className="font-medium text-gray-800 text-sm">double_softs</h4>
+                      <p className="text-xs text-gray-600">AX format (A7, AT), ranges (A3-A8), or NONE. Supports H17/S17 splits</p>
+                    </div>
+                    <div className="bg-white rounded p-3 border border-gray-200">
+                      <h4 className="font-medium text-gray-800 text-sm">splits</h4>
+                      <p className="text-xs text-gray-600">Ascending token (A23456789T). Example: A89 splits A-A, 8-8, 9-9</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Statistics & Feedback */}
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <button
+            onClick={() => toggleSection('stats')}
+            className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-green-600 text-sm">📈</span>
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">Statistics & Feedback</h2>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedSection === 'stats' ? 'rotate-180' : ''}`} />
+          </button>
+          
+          {expandedSection === 'stats' && (
+            <div className="px-6 pb-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h3 className="font-medium text-blue-900 mb-2">Session Statistics</h3>
+                  <p className="text-sm text-blue-800">Live accuracy and error tracking while training</p>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h3 className="font-medium text-purple-900 mb-2">Lifetime Statistics</h3>
+                  <p className="text-sm text-purple-800">Cumulative volume and accuracy by mode</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="font-medium text-gray-800 mb-2">Compact Stats Bar</h3>
+                <p className="text-sm text-gray-700">Progress is visible at a glance during training sessions</p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Grading Priority */}
+        <section className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200 p-6">
+          <div className="flex items-center mb-4">
+            <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-red-600 text-sm">🎯</span>
+            </div>
+            <h2 className="text-lg font-semibold text-red-900">Grading Priority</h2>
+          </div>
+          <p className="text-sm text-red-800 mb-4">
+            Perfect modes use the actual down-card. All modes follow this priority order:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <span className="bg-red-200 text-red-800 px-3 py-1 rounded-lg text-sm font-medium">1. Split</span>
+            <span className="bg-red-200 text-red-800 px-3 py-1 rounded-lg text-sm font-medium">2. Surrender</span>
+            <span className="bg-red-200 text-red-800 px-3 py-1 rounded-lg text-sm font-medium">3. Double</span>
+            <span className="bg-red-200 text-red-800 px-3 py-1 rounded-lg text-sm font-medium">4. Hit/Stand</span>
+          </div>
+        </section>
+
+        {/* Roadmap */}
+        <section className="bg-gradient-to-br from-gray-800 to-black text-white rounded-xl p-6">
+          <div className="flex items-center mb-4">
+            <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-white text-sm">🚀</span>
+            </div>
+            <h2 className="text-lg font-semibold">What's Coming Next</h2>
+          </div>
+          <p className="text-gray-300 text-sm leading-relaxed">
+            Additional advantage-play modules—beginning with Ultimate Texas Hold 'Em and Criss Cross—are in active development.
+          </p>
+        </section>
+
+        {/* Quick Tips */}
+        <section className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center mb-4">
+            <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+              <span className="text-yellow-600 text-sm">💡</span>
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">Pro Tips</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="flex items-start space-x-2">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-sm text-gray-700">Use slash forms only when strategy truly differs between H17 and S17</p>
+              </div>
+              <div className="flex items-start space-x-2">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-sm text-gray-700">Keep splits tokens ascending and unique (A6789T, not A9876T)</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-start space-x-2">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-sm text-gray-700">Set fields to "None" to disable doubles or splits on a dealer row</p>
+              </div>
+              <div className="flex items-start space-x-2">
+                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                <p className="text-sm text-gray-700">Think in soft-other-card terms for Perfect double_softs (A7 = soft-18)</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  )
+}
 /* --------------------------------- Home UI -------------------------------- */
 
 function Home({ onGo }) {
@@ -2018,6 +2328,20 @@ function Home({ onGo }) {
               <div className="text-left">
                 <div className="font-medium text-gray-900">Strategy chart</div>
                 <div className="text-xs text-gray-500">Browse charts</div>
+              </div>
+            </div>
+          </button>
+
+          {/* New Instructions button, placed between Strategy and More */}
+          <button
+            onClick={() => onGo('instructions')}
+            className="group border border-gray-200 p-4 rounded-xl bg-white"
+          >
+            <div className="flex items-center space-x-3">
+              <Info size={24} className="text-gray-500" />
+              <div className="text-left">
+                <div className="font-medium text-gray-900">Instructions</div>
+                <div className="text-xs text-gray-500">How to use the trainer</div>
               </div>
             </div>
           </button>
@@ -2072,6 +2396,7 @@ function Dashboard() {
   }
 
   if (route === 'strategy') return <StrategyChartPage onBack={go} />
+  if (route === 'instructions') return <InstructionsPage onBack={go} />
   if (route === 'settings') return <PlaySettings onStart={startGame} onBack={go} />
   if (route === 'stats') return <StatsPage onBack={go} />
   if (route === 'about') return <AboutPage onBack={go} />
