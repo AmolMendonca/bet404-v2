@@ -433,18 +433,19 @@ function StrategyChartPage({ onBack }) {
       ? (bjCharts[bucket]?.hard || {})
       : (spCharts[bucket]?.hard || {})
 
-  // map UI bucket to API mode
+  // map UI bucket to API mode, includes perfect modes
   const bucketToApiMode = React.useCallback(() => {
     if (game === 'blackjack') {
       if (bucket === '4to10')  return '4-10'
       if (bucket === '2to3')   return '2-3'
       if (bucket === 'a9das')  return 'A-9DAS'
       if (bucket === 'a9nodas')return 'A-9NoDAS'
+      if (bucket === 'perfect')return 'perfect'
       return null
     }
-    // spanish
     if (bucket === 's4to9') return 'Spanish_4to9'
     if (bucket === 's2to3') return 'Spanish_2to3'
+    if (bucket === 'sp_perfect') return 'Spanish_perfect'
     return null
   }, [game, bucket])
 
@@ -560,7 +561,34 @@ function StrategyChartPage({ onBack }) {
     }
   }
 
+  // refresh current table from server
   const resetCurrentTable = () => { fetchChartData() }
+
+  // reset entries to defaults by calling backend endpoint, then refetch
+  const resetFromDefaults = async () => {
+    const mode = bucketToApiMode()
+    if (!mode) return
+    try {
+      const res = await authFetch('/api/reset_entries_default', {
+        method: 'POST',
+        body: JSON.stringify({ mode }),
+      })
+      if (!res.ok) {
+        toast.error(`Reset failed, HTTP ${res.status}`)
+        return
+      }
+      const json = await res.json()
+      if (!json?.ok) {
+        toast.error(json?.error || 'Reset failed')
+        return
+      }
+      toast.success('Reset to defaults')
+      await fetchChartData()
+    } catch (e) {
+      console.error(e)
+      toast.error('Network error')
+    }
+  }
 
   const allActionOptions = [
     'H','S','D','P','R',
@@ -709,9 +737,14 @@ function StrategyChartPage({ onBack }) {
               <span>{isEditableNow && editable ? 'Editing' : 'View only'}</span>
             </button>
 
-            <button onClick={resetCurrentTable} className="px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1" title="Reset">
+            {/* <button onClick={resetCurrentTable} className="px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1" title="Reset current">
               <RefreshCw size={14} />
               <span>Reset</span>
+            </button> */}
+
+            <button onClick={resetFromDefaults} className="px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1" title="Reset from defaults">
+              <RefreshCw size={14} />
+              <span>Defaults</span>
             </button>
           </div>
 
@@ -1654,6 +1687,3 @@ export default function App() {
    </>
  )
 }
-
-
-
