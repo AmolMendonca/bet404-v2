@@ -236,565 +236,629 @@ function LoginScreen() {
 /* ------------------------- Strategy chart page (lite) ------------------------- */
 
 
+/* ------------------------- Strategy chart page (lite) ------------------------- */
 function StrategyChartPage({ onBack }) {
- const [game, setGame] = React.useState('blackjack') // blackjack or spanish
- const [bucket, setBucket] = React.useState('4to10')  // active chart key within the chosen game
- const [editable, setEditable] = React.useState(true)
- const [loading, setLoading] = React.useState(true)
- const [error, setError] = React.useState(null)
- const [showLegend, setShowLegend] = React.useState(false)
-
-
- const dealerCards = ['2','3','4','5','6','7','8','9','10','A']
-
-
- // blackjack charts
- const [bjCharts, setBjCharts] = React.useState({
-   '4to10':  { hard: {} },
-   '2to3':   { hard: {} },
-   'a9das':  { hard: {} },
-   'a9nodas':{ hard: {} }
- })
- const [bjPerfect, setBjPerfect] = React.useState({ rows: [] })
-
-
- // spanish charts
- const [spCharts, setSpCharts] = React.useState({
-   's4to9':  { hard: {} },
-   's2to3':  { hard: {} }
- })
- const [spPerfect, setSpPerfect] = React.useState({ rows: [] })
-
-
- // fetch helper
- const authFetch = async (path, init = {}) => {
-   const token = await getAccessToken()
-   const headers = new Headers(init.headers || {})
-   if (token) headers.set('Authorization', `Bearer ${token}`)
-   if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-   return fetch(path, { ...init, headers, credentials: 'include' })
- }
-
-
- const getActionColor = (raw) => {
-   const a = String(raw || '').toUpperCase()
-   const head = a[0] || ''
-   if (head === 'S') return 'bg-red-100 text-red-800'
-   if (head === 'H') return 'bg-yellow-100 text-yellow-800'
-   if (head === 'D' && !a.startsWith('DS') && !a.startsWith('D/S')) return 'bg-green-100 text-green-800'
-   if (a.startsWith('DS') || a.startsWith('D/S')) return 'bg-green-50 text-green-700'
-   if (head === 'P') return 'bg-blue-100 text-blue-800'
-   if (a.startsWith('RH') || a.includes('PRH')) return 'bg-blue-50 text-blue-700'
-   return 'bg-gray-100 text-gray-800'
- }
-
-
- const getDealerIndex = (v) => {
-   const m = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'10':8,'A':9 }
-   return m[v] ?? -1
- }
-
-
- // === Pair/row labeling helpers ===
- // map API pair encoding to row labels WITHOUT doing math
- const mapPairKey = (raw) => {
-   const s = String(raw || '').toUpperCase()
-   if (s === '12') return 'AA'                      // ace pair
-   if (s === '20' || s === '1010') return 'TT'     // tens pair
-   if (/^(2|3|4|5|6|7|8|9)\1$/.test(s)) return s   // '22'..'99'
-   return s
- }
-
-
- const transformRegularChart = (apiData) => {
-   const chart = {}
-
-
-   // 1) Pairs — map strictly by string
-   apiData?.pair_entries?.forEach(entry => {
-     const { dealer_val, player_pair, recommended_move } = entry
-     const rowKey = mapPairKey(player_pair)
-     if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
-     const idx = getDealerIndex(String(dealer_val))
-     if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
-   })
-
-
-   // 2) Regular (hard/soft) totals
-   apiData?.regular_entries?.forEach(entry => {
-     const { dealer_val, player_hand_type, player_val, recommended_move } = entry
-     let rowKey
-     if (String(player_hand_type).toLowerCase() === 'soft') {
-       const aceValue = Number(player_val) - 11
-       if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}` // A2..A9
-     } else {
-       rowKey = String(player_val) // hard totals; keep "12" as hard 12 (distinct from AA)
-     }
-     if (!rowKey) return
-     if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
-     const idx = getDealerIndex(String(dealer_val))
-     if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
-   })
-   return chart
- }
-
-
- const transformPerfectChart = (apiData) => {
-   const entries = Array.isArray(apiData?.perfect_entries) ? apiData.perfect_entries : []
-   const rows = entries.map(e => ({
-     rowLabel: String(e.dealer_val),
-     columns: {
-       'Hit Until Hard': e.harduntil ?? '',
-       'Hit Until Soft': e.softstanduntil ?? '',
-       'Double Hards':   e.doublehards ?? '',
-       'Double Softs':   e.doublesofts ?? '',
-       'Splits':         e.splits ?? '',
-       'Surrender': [e.lshards, e.lssofts].filter(Boolean).join(' / ')
-     }
-   }))
-   const byLabel = Object.fromEntries(rows.map(r => [r.rowLabel.toUpperCase(), r]))
-   const hardOrdered = []
-   for (let n = 20; n >= 6; n--) {
-     const r = byLabel[String(n)]
-     if (r) hardOrdered.push(r)
-   }
-   const softPreferred = ['A6','A7','A8','A9','AA']
-   const softOrdered = softPreferred.map(l => byLabel[l]).filter(Boolean)
-   const picked = new Set([...hardOrdered, ...softOrdered].map(r => r.rowLabel.toUpperCase()))
-   const others = rows.filter(r => !picked.has(r.rowLabel.toUpperCase()))
-   return [...hardOrdered, ...softOrdered, ...others]
- }
-
-
- // load data for current selection
- const fetchChartData = async () => {
-   try {
-     setLoading(true); setError(null)
-     if (game === 'blackjack') {
-       if (bucket === 'perfect') {
-         const res = await authFetch(`/api/perfect_chart`)
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const rows = transformPerfectChart(data)
-         setBjPerfect({ rows })
-       } else if (bucket === '2to3') {
-         const res = await authFetch('/api/2to3_chart')
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const transformed = transformRegularChart(data)
-         setBjCharts(prev => ({ ...prev, ['2to3']: { hard: transformed } }))
-       } else if (bucket === 'a9das') {
-         const res = await authFetch('/api/a9das_chart')
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const transformed = transformRegularChart(data)
-         setBjCharts(prev => ({ ...prev, ['a9das']: { hard: transformed } }))
-       } else if (bucket === 'a9nodas') {
-         const res = await authFetch('/api/a9nodas_chart')
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const transformed = transformRegularChart(data)
-         setBjCharts(prev => ({ ...prev, ['a9nodas']: { hard: transformed } }))
-       } else {
-         const res = await authFetch('/api/4to10_chart')
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const transformed = transformRegularChart(data)
-         setBjCharts(prev => ({ ...prev, ['4to10']: { hard: transformed } }))
-       }
-     } else {
-       // spanish
-       if (bucket === 'sp_perfect') {
-         const res = await authFetch(`/api/spanish_perfect_chart`)
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const rows = transformPerfectChart(data)
-         setSpPerfect({ rows })
-       } else if (bucket === 's2to3') {
-         const res = await authFetch('/api/spanish_2to3_chart')
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const transformed = transformRegularChart(data)
-         setSpCharts(prev => ({ ...prev, ['s2to3']: { hard: transformed } }))
-       } else {
-         const res = await authFetch('/api/spanish_4to9_chart')
-         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-         const data = await res.json()
-         const transformed = transformRegularChart(data)
-         setSpCharts(prev => ({ ...prev, ['s4to9']: { hard: transformed } }))
-       }
-     }
-   } catch (err) {
-     console.error('Error fetching chart data:', err)
-     setError(err.message)
-   } finally {
-     setLoading(false)
-   }
- }
-
-
- // change bucket defaults when switching game
- React.useEffect(() => {
-   setBucket(game === 'blackjack' ? '4to10' : 's4to9')
- }, [game])
-
-
- React.useEffect(() => { fetchChartData() }, [game, bucket])
-
-
- // current table source
- const table =
-   game === 'blackjack'
-     ? (bjCharts[bucket]?.hard || {})
-     : (spCharts[bucket]?.hard || {})
-
-
- // keep edit only for blackjack 2 to 3 as before
- const isEditableNow = game === 'blackjack' && bucket === '2to3'
-
-
- const setCell = (rowLabel, colIndex, value) => {
-   if (!isEditableNow) return
-   setBjCharts(prev => {
-     const next = JSON.parse(JSON.stringify(prev))
-     if (!next[bucket]) next[bucket] = {}
-     if (!next[bucket].hard) next[bucket].hard = {}
-     if (!next[bucket].hard[rowLabel]) next[bucket].hard[rowLabel] = new Array(10).fill('H')
-     next[bucket].hard[rowLabel][colIndex] = String(value).toUpperCase()
-     return next
-   })
- }
-
-
- const resetCurrentTable = () => { fetchChartData() }
-
-
- const allActionOptions = [
-   'H','S','D','P','R',
-   'DS','D/S',
-   'RH','R/H',
-   'RS','R/S',
-   'RP','R/P',
-   'RP/H','RH/H','RH/P','RH/PRH'
- ]
-
-
- // labels per game
- const dealerLabelMapBJ = {
-   '4to10': '4 to 10',
-   '2to3': '2 to 3',
-   'a9das': 'A to 9 DAS',
-   'a9nodas': 'A to 9 NoDAS'
- }
- const dealerLabelMapSP = {
-   's4to9': '4 to 9',
-   's2to3': '2 to 3'
- }
-
-
- // sort rows (hards, softs, then pairs; treat 11 as hard; TT near bottom, AA last)
- const sortedEntries = React.useMemo(() => {
-   const entries = Object.entries(table)
-
-
-   const isDigits = (s) => /^\d+$/.test(s)
-   // soft hands are A2..A9 only (AA is a pair, not a soft row here)
-   const isSoft = (s) => /^A[2-9]$/.test(s)
-   // pairs: 22..99, TT, AA (explicitly exclude "11" which is hard 11)
-   const isPair = (s) =>
-     s === 'AA' ||
-     s === 'TT' ||
-     (/^(\d)\1$/.test(s) && s !== '11')
-
-
-   const pairOrder = { '22':2,'33':3,'44':4,'55':5,'66':6,'77':7,'88':8,'99':9,'TT':10,'AA':11 }
-
-
-   const groupOrder = (label) => {
-     if (isDigits(label) && !isPair(label)) return 0    // hards
-     if (isSoft(label)) return 1                        // softs
-     if (isPair(label)) return 2                        // pairs
-     return 3
-   }
-
-
-   const numericKey = (label) => {
-     if (isSoft(label)) return parseInt(label.slice(1), 10)
-     if (isPair(label)) return 100 + (pairOrder[label] ?? 99) // ensure pairs come after, TT near bottom, AA last
-     if (/^\d+$/.test(label)) return parseInt(label, 10)
-     return Number.MAX_SAFE_INTEGER
-   }
-
-
-   return entries.sort(([a], [b]) => {
-     const ga = groupOrder(a), gb = groupOrder(b)
-     if (ga !== gb) return ga - gb
-     const na = numericKey(a), nb = numericKey(b)
-     if (na !== nb) return na - nb
-     // final stable tie-break
-     return a.localeCompare(b)
-   })
- }, [table])
-
-
- if (loading) {
-   return (
-     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-       <div className="text-center">
-         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-         <p className="text-gray-600">Loading strategy chart...</p>
-       </div>
-     </div>
-   )
- }
-
-
- if (error) {
-   return (
-     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-       <div className="text-center bg-white p-6 rounded-lg border border-red-200">
-         <p className="text-red-600 mb-4">Error loading chart: {error}</p>
-         <button onClick={fetchChartData} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-           Retry
-         </button>
-       </div>
-     </div>
-   )
- }
-
-
- const isPerfect = (game === 'blackjack' && bucket === 'perfect') || (game === 'spanish' && bucket === 'sp_perfect')
- const perfectRows = game === 'blackjack' ? bjPerfect.rows : spPerfect.rows
-
-
- // options per game for the second selector
- const chartOptions = game === 'blackjack'
-   ? [
-       { value: '4to10', label: '4 to 10' },
-       { value: '2to3', label: '2 to 3' },
-       { value: 'a9das', label: 'A to 9 DAS' },
-       { value: 'a9nodas', label: 'A to 9 NoDAS' },
-       { value: 'perfect', label: 'Perfect' },
-     ]
-   : [
-       { value: 's4to9', label: '4 to 9' },
-       { value: 's2to3', label: '2 to 3' },
-       { value: 'sp_perfect', label: 'Perfect' },
-     ]
-
-
- return (
-   <div className="min-h-screen bg-gray-50">
-     <TopNav title="Strategy chart" onGo={onBack} showBack />
-     <main className="px-2 py-4">
-       <div className="grid grid-cols-1 gap-2 mb-4">
-
-
-         {/* game selector, pill style */}
-         <div className="bg-white rounded-lg border border-gray-200 p-2">
-           <div className="flex items-center">
-             <span className="text-sm text-gray-700 mr-2">Game</span>
-             <div className="relative">
-               <div className="grid grid-cols-2 bg-gray-100 rounded-lg p-1">
-                 <button
-                   onClick={() => setGame('blackjack')}
-                   className={`px-3 py-1 text-sm rounded-md transition ${game === 'blackjack' ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}
-                   aria-pressed={game === 'blackjack'}
-                 >
-                   Blackjack
-                 </button>
-                 <button
-                   onClick={() => setGame('spanish')}
-                   className={`px-3 py-1 text-sm rounded-md transition ${game === 'spanish' ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}
-                   aria-pressed={game === 'spanish'}
-                 >
-                   Spanish 21
-                 </button>
-               </div>
-             </div>
-           </div>
-         </div>
-
-
-         {/* chart selector */}
-         <div className="bg-white rounded-lg border border-gray-200 p-2 flex items-center space-x-2">
-           <label className="text-sm text-gray-700">Chart</label>
-           <select
-             value={bucket}
-             onChange={(e)=>setBucket(e.target.value)}
-             className="border border-gray-200 rounded px-2 py-1 text-sm"
-           >
-             {chartOptions.map(opt => (
-               <option key={opt.value} value={opt.value}>{opt.label}</option>
-             ))}
-           </select>
-
-
-           <button
-             onClick={()=> isEditableNow ? setEditable(!editable) : null}
-             disabled={!isEditableNow}
-             className={`ml-auto px-2 py-1 border rounded text-sm flex items-center space-x-1 ${isEditableNow ? 'border-gray-200' : 'border-gray-100 text-gray-400 cursor-not-allowed'}`}
-             title={isEditableNow ? 'Toggle edit' : 'Editing available only for 2 to 3 in Blackjack'}
-           >
-             <Edit3 size={14} />
-             <span>{isEditableNow && editable ? 'Editing' : 'View only'}</span>
-           </button>
-
-
-           <button onClick={resetCurrentTable} className="px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1" title="Reset">
-             <RefreshCw size={14} />
-             <span>Reset</span>
-           </button>
-         </div>
-
-
-         <div className="bg-white rounded-lg border border-gray-200 p-2">
-           <button onClick={() => setShowLegend(!showLegend)} className="flex items-center space-x-2 text-sm text-gray-600">
-             <Info size={16} />
-             <span>Legend and syntax</span>
-             {showLegend ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-           </button>
-           {showLegend && (
-             <div className="mt-2 text-xs text-gray-700 space-y-2">
-               <div className="grid grid-cols-5 gap-2">
-                 <div className="flex flex-wrap gap-3">
-                   <div className="flex items-center space-x-2">
-                     <span className="px-2 py-1 rounded bg-red-100 text-red-800 font-medium">S</span>
-                     <span>Stand</span>
-                   </div>
-                   <div className="flex items-center space-x-2">
-                     <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 font-medium">H</span>
-                     <span>Hit</span>
-                   </div>
-                   <div className="flex items-center space-x-2">
-                     <span className="px-2 py-1 rounded bg-green-100 text-green-800 font-medium">D</span>
-                     <span>Double</span>
-                   </div>
-                   <div className="flex items-center space-x-2">
-                     <span className="px-2 py-1 rounded bg-green-50 text-green-700 font-medium">DS</span>
-                     <span>DS or D slash S</span>
-                   </div>
-                   <div className="flex items-center space-x-2">
-                     <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">P</span>
-                     <span>Split</span>
-                   </div>
-                   <div className="flex items-center space-x-2">
-                     <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-medium">RH</span>
-                     <span>RH or PRH</span>
-                   </div>
-                 </div>
-               </div>
-               <div className="mt-2">
-                 <div className="font-medium">Syntax</div>
-                 <ul className="list-disc ml-5 space-y-1">
-                   <li><span className="font-mono">XY</span>, X is best, if X is not allowed then Y is best</li>
-                   <li className="text-gray-600">Examples</li>
-                   <li><span className="font-mono">RP/H</span>, Surrender if possible, if not Split, otherwise Hit</li>
-                   <li><span className="font-mono">D/S</span> is different from <span className="font-mono">DS</span>, <span className="font-mono">R/P</span> is different from <span className="font-mono">RP</span></li>
-                 </ul>
-               </div>
-             </div>
-           )}
-         </div>
-       </div>
-
-
-       {!isPerfect ? (
-         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-             <h2 className="font-medium text-gray-900">Strategy Chart</h2>
-             <p className="text-xs text-gray-500 mt-1">
-               Dealer {game === 'blackjack' ? (dealerLabelMapBJ[bucket] || '') : (dealerLabelMapSP[bucket] || '')}
-             </p>
-           </div>
-
-
-           <div className="overflow-x-auto">
-             <div className="min-w-max">
-               <div className="flex bg-gray-100 border-b border-gray-200">
-                 <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-600 border-r border-gray-200">Hand</div>
-                 {dealerCards.map((card) => (
-                   <div key={card} className="w-12 py-3 text-center text-xs font-medium text-gray-600 border-r border-gray-200 last:border-r-0">{card}</div>
-                 ))}
-               </div>
-
-
-               <div className="divide-y divide-gray-200">
-                 {sortedEntries.map(([playerHandLabel, actions]) => (
-                   <div key={playerHandLabel} className="flex">
-                     <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-900 bg-gray-50 border-r border-gray-200">{playerHandLabel}</div>
-                     {actions.map((action, index) => (
-                       <div key={index} className="w-12 py-2 px-1 text-center border-r border-gray-200 last:border-r-0">
-                         {isEditableNow && editable ? (
-                           <select
-                             value={action}
-                             onChange={(e) => setCell(playerHandLabel, index, e.target.value)}
-                             className={`w-full text-xs rounded px-1 py-1 ${getActionColor(action)}`}
-                           >
-                             {allActionOptions.map(opt => (
-                               <option key={opt} value={opt}>{opt}</option>
-                             ))}
-                           </select>
-                         ) : (
-                           <span className={`px-1.5 py-1 rounded text-xs font-medium ${getActionColor(action)}`}>{String(action)}</span>
-                         )}
-                       </div>
-                     ))}
-                   </div>
-                 ))}
-               </div>
-             </div>
-           </div>
-         </div>
-       ) : (
-         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-           <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-             <h2 className="font-medium text-gray-900">Perfect Chart</h2>
-             <p className="text-xs text-gray-500 mt-1">Rows are dealer values twenty to six, then A6 to AA</p>
-           </div>
-
-
-           {perfectRows.length === 0 ? (
-             <div className="p-6 text-sm text-gray-600">No rows received from server, check console for the raw response</div>
-           ) : (
-             <div className="overflow-x-auto">
-               <table className="min-w-full text-xs">
-                 <thead>
-                   <tr className="bg-gray-100 text-gray-700">
-                     <th className="px-2 py-2 border border-gray-200 text-left">Dealer</th>
-                     <th className="px-2 py-2 border border-gray-200 text-left">Hit Until Hard</th>
-                     <th className="px-2 py-2 border border-gray-200 text-left">Hit Until Soft</th>
-                     <th className="px-2 py-2 border border-gray-200 text-left">Double Hards</th>
-                     <th className="px-2 py-2 border border-gray-200 text-left">Double Softs</th>
-                     <th className="px-2 py-2 border border-gray-200 text-left">Splits</th>
-                     <th className="px-2 py-2 border border-gray-200 text-left">Surrender</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {perfectRows.map((row, i) => {
-                     const c = row.columns || {}
-                     const renderCell = (val) => val && val.trim() !== '' ? val : '❌'
-                     return (
-                       <tr key={i} className="odd:bg-white even:bg-gray-50">
-                         <td className="px-2 py-2 border border-gray-100 font-medium text-gray-900">{row.rowLabel}</td>
-                         <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Hard'])}</td>
-                         <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Soft'])}</td>
-                         <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Hards'])}</td>
-                         <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Softs'])}</td>
-                         <td className="px-2 py-2 border border-gray-100">{renderCell(c['Splits'])}</td>
-                         <td className="px-2 py-2 border border-gray-100">{renderCell(c['Surrender'])}</td>
-                       </tr>
-                     )
-                   })}
-                 </tbody>
-               </table>
-             </div>
-           )}
-         </div>
-       )}
-     </main>
-   </div>
- )
+  const [game, setGame] = React.useState('blackjack') // blackjack or spanish
+  const [bucket, setBucket] = React.useState('4to10')  // active chart key within the chosen game
+  const [editable, setEditable] = React.useState(true)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState(null)
+  const [showLegend, setShowLegend] = React.useState(false)
+
+  const dealerCards = ['2','3','4','5','6','7','8','9','10','A']
+
+  // blackjack charts
+  const [bjCharts, setBjCharts] = React.useState({
+    '4to10':  { hard: {} },
+    '2to3':   { hard: {} },
+    'a9das':  { hard: {} },
+    'a9nodas':{ hard: {} }
+  })
+  const [bjPerfect, setBjPerfect] = React.useState({ rows: [] })
+
+  // spanish charts
+  const [spCharts, setSpCharts] = React.useState({
+    's4to9':  { hard: {} },
+    's2to3':  { hard: {} }
+  })
+  const [spPerfect, setSpPerfect] = React.useState({ rows: [] })
+
+  // auth fetch
+  const authFetch = async (path, init = {}) => {
+    const token = await getAccessToken()
+    const headers = new Headers(init.headers || {})
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    return fetch(path, { ...init, headers, credentials: 'include' })
+  }
+
+  // ui color helper
+  const getActionColor = (raw) => {
+    const a = String(raw || '').toUpperCase()
+    const head = a[0] || ''
+    if (head === 'S') return 'bg-red-100 text-red-800'
+    if (head === 'H') return 'bg-yellow-100 text-yellow-800'
+    if (head === 'D' && !a.startsWith('DS') && !a.startsWith('D/S')) return 'bg-green-100 text-green-800'
+    if (a.startsWith('DS') || a.startsWith('D/S')) return 'bg-green-50 text-green-700'
+    if (head === 'P') return 'bg-blue-100 text-blue-800'
+    if (a.startsWith('RH') || a.includes('PRH')) return 'bg-blue-50 text-blue-700'
+    return 'bg-gray-100 text-gray-800'
+  }
+
+  const getDealerIndex = (v) => {
+    const m = { '2':0,'3':1,'4':2,'5':3,'6':4,'7':5,'8':6,'9':7,'10':8,'A':9 }
+    return m[v] ?? -1
+  }
+
+  // map API pair encoding to row labels without math
+  const mapPairKey = (raw) => {
+    const s = String(raw || '').toUpperCase()
+    if (s === '12') return 'AA'                  // ace pair
+    if (s === '20' || s === '1010') return 'TT'  // tens pair
+    if (/^(2|3|4|5|6|7|8|9)\1$/.test(s)) return s   // '22'..'99'
+    return s
+  }
+
+  const transformRegularChart = (apiData) => {
+    const chart = {}
+
+    // pairs
+    apiData?.pair_entries?.forEach(entry => {
+      const { dealer_val, player_pair, recommended_move } = entry
+      const rowKey = mapPairKey(player_pair)
+      if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
+      const idx = getDealerIndex(String(dealer_val))
+      if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
+    })
+
+    // regular
+    apiData?.regular_entries?.forEach(entry => {
+      const { dealer_val, player_hand_type, player_val, recommended_move } = entry
+      let rowKey
+      if (String(player_hand_type).toLowerCase() === 'soft') {
+        const aceValue = Number(player_val) - 11
+        if (aceValue >= 2 && aceValue <= 9) rowKey = `A${aceValue}` // A2..A9
+      } else {
+        rowKey = String(player_val)
+      }
+      if (!rowKey) return
+      if (!chart[rowKey]) chart[rowKey] = new Array(10).fill('H')
+      const idx = getDealerIndex(String(dealer_val))
+      if (idx !== -1) chart[rowKey][idx] = String(recommended_move).toUpperCase()
+    })
+    return chart
+  }
+
+  const transformPerfectChart = (apiData) => {
+    const entries = Array.isArray(apiData?.perfect_entries) ? apiData.perfect_entries : []
+    const rows = entries.map(e => ({
+      rowLabel: String(e.dealer_val),
+      columns: {
+        'Hit Until Hard': e.harduntil ?? '',
+        'Hit Until Soft': e.softstanduntil ?? '',
+        'Double Hards':   e.doublehards ?? '',
+        'Double Softs':   e.doublesofts ?? '',
+        'Splits':         e.splits ?? '',
+        'Surrender': [e.lshards, e.lssofts].filter(Boolean).join(' / ')
+      }
+    }))
+    const byLabel = Object.fromEntries(rows.map(r => [r.rowLabel.toUpperCase(), r]))
+    const hardOrdered = []
+    for (let n = 20; n >= 6; n--) {
+      const r = byLabel[String(n)]
+      if (r) hardOrdered.push(r)
+    }
+    const softPreferred = ['A6','A7','A8','A9','AA']
+    const softOrdered = softPreferred.map(l => byLabel[l]).filter(Boolean)
+    const picked = new Set([...hardOrdered, ...softOrdered].map(r => r.rowLabel.toUpperCase()))
+    const others = rows.filter(r => !picked.has(r.rowLabel.toUpperCase()))
+    return [...hardOrdered, ...softOrdered, ...others]
+  }
+
+  // load data
+  const fetchChartData = async () => {
+    try {
+      setLoading(true); setError(null)
+      if (game === 'blackjack') {
+        if (bucket === 'perfect') {
+          const res = await authFetch(`/api/perfect_chart`)
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const rows = transformPerfectChart(data)
+          setBjPerfect({ rows })
+        } else if (bucket === '2to3') {
+          const res = await authFetch('/api/2to3_chart')
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const transformed = transformRegularChart(data)
+          setBjCharts(prev => ({ ...prev, ['2to3']: { hard: transformed } }))
+        } else if (bucket === 'a9das') {
+          const res = await authFetch('/api/a9das_chart')
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const transformed = transformRegularChart(data)
+          setBjCharts(prev => ({ ...prev, ['a9das']: { hard: transformed } }))
+        } else if (bucket === 'a9nodas') {
+          const res = await authFetch('/api/a9nodas_chart')
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const transformed = transformRegularChart(data)
+          setBjCharts(prev => ({ ...prev, ['a9nodas']: { hard: transformed } }))
+        } else {
+          const res = await authFetch('/api/4to10_chart')
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const transformed = transformRegularChart(data)
+          setBjCharts(prev => ({ ...prev, ['4to10']: { hard: transformed } }))
+        }
+      } else {
+        if (bucket === 'sp_perfect') {
+          const res = await authFetch(`/api/spanish_perfect_chart`)
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const rows = transformPerfectChart(data)
+          setSpPerfect({ rows })
+        } else if (bucket === 's2to3') {
+          const res = await authFetch('/api/spanish_2to3_chart')
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const transformed = transformRegularChart(data)
+          setSpCharts(prev => ({ ...prev, ['s2to3']: { hard: transformed } }))
+        } else {
+          const res = await authFetch('/api/spanish_4to9_chart')
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const data = await res.json()
+          const transformed = transformRegularChart(data)
+          setSpCharts(prev => ({ ...prev, ['s4to9']: { hard: transformed } }))
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching chart data:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // default bucket per game
+  React.useEffect(() => {
+    setBucket(game === 'blackjack' ? '4to10' : 's4to9')
+  }, [game])
+
+  React.useEffect(() => { fetchChartData() }, [game, bucket])
+
+  // current table
+  const table =
+    game === 'blackjack'
+      ? (bjCharts[bucket]?.hard || {})
+      : (spCharts[bucket]?.hard || {})
+
+  // map UI bucket to API mode
+  const bucketToApiMode = React.useCallback(() => {
+    if (game === 'blackjack') {
+      if (bucket === '4to10')  return '4-10'
+      if (bucket === '2to3')   return '2-3'
+      if (bucket === 'a9das')  return 'A-9DAS'
+      if (bucket === 'a9nodas')return 'A-9NoDAS'
+      return null
+    }
+    // spanish
+    if (bucket === 's4to9') return 'Spanish_4to9'
+    if (bucket === 's2to3') return 'Spanish_2to3'
+    return null
+  }, [game, bucket])
+
+  // whether this selection is the perfect chart
+  const isPerfect = (game === 'blackjack' && bucket === 'perfect') || (game === 'spanish' && bucket === 'sp_perfect')
+  const perfectRows = game === 'blackjack' ? bjPerfect.rows : spPerfect.rows
+
+  // allow editing for any non perfect bucket
+  const isEditableNow = !isPerfect
+
+  // map a row label and column to the API payload fields
+  const buildUpdatePayload = (rowLabel, colIndex, newMoveUpper) => {
+    const mode = bucketToApiMode()
+    if (!mode) return null
+
+    // dealer value
+    const dealer_val = dealerCards[colIndex] === 'T' ? '10' : dealerCards[colIndex]
+
+    // pairs
+    const isAA = rowLabel === 'AA'
+    const isTT = rowLabel === 'TT'
+    const isDigitPair = /^(\d)\1$/.test(rowLabel) && rowLabel !== '11'
+
+    if (isAA || isTT || isDigitPair) {
+      let pv
+      if (isAA) pv = 12
+      else if (isTT) pv = 20
+      else pv = parseInt(rowLabel, 10) // 22..99
+      return {
+        mode,
+        dealer_val,
+        player_val: pv,
+        player_pair: true,
+        player_hand_type: 'hard', // ignored by server for pairs
+        new_move: newMoveUpper,
+      }
+    }
+
+    // soft hands A2..A9
+    if (/^A[2-9]$/.test(rowLabel)) {
+      const n = parseInt(rowLabel.slice(1), 10) // 2..9
+      const pv = 11 + n                          // 13..20
+      return {
+        mode,
+        dealer_val,
+        player_val: pv,
+        player_pair: false,
+        player_hand_type: 'soft',
+        new_move: newMoveUpper,
+      }
+    }
+
+    // hard totals like 8..20 and 11 is hard, not a pair
+    if (/^\d+$/.test(rowLabel)) {
+      const pv = parseInt(rowLabel, 10)
+      return {
+        mode,
+        dealer_val,
+        player_val: pv,
+        player_pair: false,
+        player_hand_type: 'hard',
+        new_move: newMoveUpper,
+      }
+    }
+
+    return null
+  }
+
+  // save to server, then update local state on success
+  const saveCell = async (rowLabel, colIndex, newVal) => {
+    if (!isEditableNow) return
+    const newMoveUpper = String(newVal || '').toUpperCase()
+    const payload = buildUpdatePayload(rowLabel, colIndex, newMoveUpper)
+    if (!payload) {
+      toast.error('Row cannot be edited')
+      return
+    }
+
+    try {
+      const res = await authFetch('/api/chart/update_cell', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        toast.error(`Save failed, HTTP ${res.status}`)
+        return
+      }
+      const json = await res.json()
+      if (!json?.ok) {
+        toast.error('Server did not confirm change')
+        return
+      }
+
+      // update local state only after success
+      const applyLocal = (setFn, key) => {
+        setFn(prev => {
+          const next = JSON.parse(JSON.stringify(prev))
+          if (!next[key]) next[key] = {}
+          if (!next[key].hard) next[key].hard = {}
+          if (!next[key].hard[rowLabel]) next[key].hard[rowLabel] = new Array(10).fill('H')
+          next[key].hard[rowLabel][colIndex] = newMoveUpper
+          return next
+        })
+      }
+
+      if (game === 'blackjack') applyLocal(setBjCharts, bucket)
+      else applyLocal(setSpCharts, bucket)
+
+      toast.success('Saved')
+    } catch (e) {
+      console.error(e)
+      toast.error('Network error')
+    }
+  }
+
+  const resetCurrentTable = () => { fetchChartData() }
+
+  const allActionOptions = [
+    'H','S','D','P','R',
+    'DS','D/S',
+    'RH','R/H',
+    'RS','R/S',
+    'RP','R/P',
+    'RP/H','RH/H','RH/P','RH/PRH'
+  ]
+
+  const dealerLabelMapBJ = {
+    '4to10': '4 to 10',
+    '2to3': '2 to 3',
+    'a9das': 'A to 9 DAS',
+    'a9nodas': 'A to 9 NoDAS'
+  }
+  const dealerLabelMapSP = {
+    's4to9': '4 to 9',
+    's2to3': '2 to 3'
+  }
+
+  // sort rows, hards then softs then pairs, TT near bottom, AA last
+  const sortedEntries = React.useMemo(() => {
+    const entries = Object.entries(table)
+
+    const isDigits = (s) => /^\d+$/.test(s)
+    const isSoft = (s) => /^A[2-9]$/.test(s)
+    const isPair = (s) =>
+      s === 'AA' ||
+      s === 'TT' ||
+      (/^(\d)\1$/.test(s) && s !== '11')
+
+    const pairOrder = { '22':2,'33':3,'44':4,'55':5,'66':6,'77':7,'88':8,'99':9,'TT':10,'AA':11 }
+
+    const groupOrder = (label) => {
+      if (isDigits(label) && !isPair(label)) return 0
+      if (isSoft(label)) return 1
+      if (isPair(label)) return 2
+      return 3
+    }
+
+    const numericKey = (label) => {
+      if (isSoft(label)) return parseInt(label.slice(1), 10)
+      if (isPair(label)) return 100 + (pairOrder[label] ?? 99)
+      if (/^\d+$/.test(label)) return parseInt(label, 10)
+      return Number.MAX_SAFE_INTEGER
+    }
+
+    return entries.sort(([a], [b]) => {
+      const ga = groupOrder(a), gb = groupOrder(b)
+      if (ga !== gb) return ga - gb
+      const na = numericKey(a), nb = numericKey(b)
+      if (na !== nb) return na - nb
+      return a.localeCompare(b)
+    })
+  }, [table])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <p className="text-gray-600">Loading strategy chart...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center bg-white p-6 rounded-lg border border-red-200">
+          <p className="text-red-600 mb-4">Error loading chart, {error}</p>
+          <button onClick={fetchChartData} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const chartOptions = game === 'blackjack'
+    ? [
+        { value: '4to10', label: '4 to 10' },
+        { value: '2to3', label: '2 to 3' },
+        { value: 'a9das', label: 'A to 9 DAS' },
+        { value: 'a9nodas', label: 'A to 9 NoDAS' },
+        { value: 'perfect', label: 'Perfect' },
+      ]
+    : [
+        { value: 's4to9', label: '4 to 9' },
+        { value: 's2to3', label: '2 to 3' },
+        { value: 'sp_perfect', label: 'Perfect' },
+      ]
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNav title="Strategy chart" onGo={onBack} showBack />
+      <main className="px-2 py-4">
+        <div className="grid grid-cols-1 gap-2 mb-4">
+          {/* game selector */}
+          <div className="bg-white rounded-lg border border-gray-200 p-2">
+            <div className="flex items-center">
+              <span className="text-sm text-gray-700 mr-2">Game</span>
+              <div className="relative">
+                <div className="grid grid-cols-2 bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setGame('blackjack')}
+                    className={`px-3 py-1 text-sm rounded-md transition ${game === 'blackjack' ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}
+                    aria-pressed={game === 'blackjack'}
+                  >
+                    Blackjack
+                  </button>
+                  <button
+                    onClick={() => setGame('spanish')}
+                    className={`px-3 py-1 text-sm rounded-md transition ${game === 'spanish' ? 'bg-white shadow text-gray-900' : 'text-gray-600'}`}
+                    aria-pressed={game === 'spanish'}
+                  >
+                    Spanish 21
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* chart selector and controls */}
+          <div className="bg-white rounded-lg border border-gray-200 p-2 flex items-center space-x-2">
+            <label className="text-sm text-gray-700">Chart</label>
+            <select
+              value={bucket}
+              onChange={(e)=>setBucket(e.target.value)}
+              className="border border-gray-200 rounded px-2 py-1 text-sm"
+            >
+              {chartOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+
+            <button
+              onClick={()=> isEditableNow ? setEditable(!editable) : null}
+              disabled={!isEditableNow}
+              className={`ml-auto px-2 py-1 border rounded text-sm flex items-center space-x-1 ${isEditableNow ? 'border-gray-200' : 'border-gray-100 text-gray-400 cursor-not-allowed'}`}
+              title={isEditableNow ? 'Toggle edit' : 'Cannot edit perfect charts'}
+            >
+              <Edit3 size={14} />
+              <span>{isEditableNow && editable ? 'Editing' : 'View only'}</span>
+            </button>
+
+            <button onClick={resetCurrentTable} className="px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1" title="Reset">
+              <RefreshCw size={14} />
+              <span>Reset</span>
+            </button>
+          </div>
+
+          {/* legend */}
+          <div className="bg-white rounded-lg border border-gray-200 p-2">
+            <button onClick={() => setShowLegend(!showLegend)} className="flex items-center space-x-2 text-sm text-gray-600">
+              <Info size={16} />
+              <span>Legend and syntax</span>
+              {showLegend ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            {showLegend && (
+              <div className="mt-2 text-xs text-gray-700 space-y-2">
+                <div className="grid grid-cols-5 gap-2">
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-red-100 text-red-800 font-medium">S</span>
+                      <span>Stand</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-yellow-100 text-yellow-800 font-medium">H</span>
+                      <span>Hit</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-green-100 text-green-800 font-medium">D</span>
+                      <span>Double</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-green-50 text-green-700 font-medium">DS</span>
+                      <span>DS or D slash S</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-blue-100 text-blue-800 font-medium">P</span>
+                      <span>Split</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-medium">RH</span>
+                      <span>RH or PRH</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <div className="font-medium">Syntax</div>
+                  <ul className="list-disc ml-5 space-y-1">
+                    <li><span className="font-mono">XY</span>, X is best, if X is not allowed then Y is best</li>
+                    <li className="text-gray-600">Examples</li>
+                    <li><span className="font-mono">RP/H</span>, Surrender if possible, if not Split, otherwise Hit</li>
+                    <li><span className="font-mono">D/S</span> is different from <span className="font-mono">DS</span>, <span className="font-mono">R/P</span> is different from <span className="font-mono">RP</span></li>
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {!isPerfect ? (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+              <h2 className="font-medium text-gray-900">Strategy Chart</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Dealer {game === 'blackjack' ? (dealerLabelMapBJ[bucket] || '') : (dealerLabelMapSP[bucket] || '')}
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <div className="min-w-max">
+                <div className="flex bg-gray-100 border-b border-gray-200">
+                  <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-600 border-r border-gray-200">Hand</div>
+                  {dealerCards.map((card) => (
+                    <div key={card} className="w-12 py-3 text-center text-xs font-medium text-gray-600 border-r border-gray-200 last:border-r-0">{card}</div>
+                  ))}
+                </div>
+
+                <div className="divide-y divide-gray-200">
+                  {sortedEntries.map(([playerHandLabel, actions]) => (
+                    <div key={playerHandLabel} className="flex">
+                      <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-900 bg-gray-50 border-r border-gray-200">{playerHandLabel}</div>
+                      {actions.map((action, index) => (
+                        <div key={index} className="w-12 py-2 px-1 text-center border-r border-gray-200 last:border-r-0">
+                          {isEditableNow && editable ? (
+                            <select
+                              value={action}
+                              onChange={(e) => saveCell(playerHandLabel, index, e.target.value)}
+                              className={`w-full text-xs rounded px-1 py-1 ${getActionColor(action)}`}
+                            >
+                              {allActionOptions.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className={`px-1.5 py-1 rounded text-xs font-medium ${getActionColor(action)}`}>{String(action)}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+              <h2 className="font-medium text-gray-900">Perfect Chart</h2>
+              <p className="text-xs text-gray-500 mt-1">Rows are dealer values twenty to six, then A6 to AA</p>
+            </div>
+
+            {perfectRows.length === 0 ? (
+              <div className="p-6 text-sm text-gray-600">No rows received from server, check console for the raw response</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-100 text-gray-700">
+                      <th className="px-2 py-2 border border-gray-200 text-left">Dealer</th>
+                      <th className="px-2 py-2 border border-gray-200 text-left">Hit Until Hard</th>
+                      <th className="px-2 py-2 border border-gray-200 text-left">Hit Until Soft</th>
+                      <th className="px-2 py-2 border border-gray-200 text-left">Double Hards</th>
+                      <th className="px-2 py-2 border border-gray-200 text-left">Double Softs</th>
+                      <th className="px-2 py-2 border border-gray-200 text-left">Splits</th>
+                      <th className="px-2 py-2 border border-gray-200 text-left">Surrender</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {perfectRows.map((row, i) => {
+                      const c = row.columns || {}
+                      const renderCell = (val) => val && val.trim() !== '' ? val : '❌'
+                      return (
+                        <tr key={i} className="odd:bg-white even:bg-gray-50">
+                          <td className="px-2 py-2 border border-gray-100 font-medium text-gray-900">{row.rowLabel}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Hard'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Soft'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Hards'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Softs'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Splits'])}</td>
+                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Surrender'])}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  )
 }
 
 
