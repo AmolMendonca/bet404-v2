@@ -245,7 +245,8 @@ const canonicalHoleMode = (m) => {
   return s
 }
 
-const supportedHoleModesForGrader = ['4-10', '2-3']
+// NOW includes 'perfect'
+const supportedHoleModesForGrader = ['4-10', '2-3', 'perfect']
 const resolveHoleModeForGrader = (holeCardChoice) => {
   const s = canonicalHoleMode(holeCardChoice)
   if (s === '4to9') return '4-10' // grader fallback
@@ -473,7 +474,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
     setSubmitting(true);
     try {
       const payload = {
-        hole_mode: resolvedForGrader, // '4-10' or '2-3' for grader
+        hole_mode: resolvedForGrader, // '4-10' | '2-3' | 'perfect'
         player_cards: (initialDeal.player_cards || []).map(c => ({
           rank: rankForBackend(c.value),
           suit: c.suit
@@ -485,7 +486,15 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
         action: toBackendLetter(action)
       };
 
-      console.log('[grade] using hole_mode', resolvedForGrader);
+      // Include dealer_hole only for perfect mode (Blackjack or Spanish)
+      if (resolvedForGrader === 'perfect' && initialDeal.dealer_hole_card) {
+        payload.dealer_hole = {
+          rank: rankForBackend(initialDeal.dealer_hole_card.value),
+          suit: initialDeal.dealer_hole_card.suit
+        }
+      }
+
+      console.log('[grade] using hole_mode', resolvedForGrader, payload);
 
       const res = await authFetch(gradeEndpoint, {
         method: 'POST',
