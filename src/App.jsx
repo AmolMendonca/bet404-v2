@@ -2503,7 +2503,9 @@ function Home({ onGo }) {
               <Gamepad2 size={24} className="text-gray-500" />
               <div className="text-left">
                 <div className="font-medium text-gray-900">More games</div>
-                <div className="text-xs text-gray-500">Browse extras</div>
+                <div className="text-xs text-gray-500">Ultimate Texas Hold 'Em & more are in development.
+
+</div>
               </div>
             </div>
           </button>
