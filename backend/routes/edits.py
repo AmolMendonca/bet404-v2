@@ -277,6 +277,69 @@ def _validate_value(col: str, new_val: str) -> bool:
         return _valid_splits(new_val)
     return False
 
+# ---- replace the double_* validators with these helpers ----
+def _valid_int_or_range(token: str, lo: int, hi: int) -> bool:
+    t = (token or "").strip()
+    if "-" in t:
+        a, b = t.split("-", 1)
+        if not (a.isdigit() and b.isdigit()):
+            return False
+        a, b = int(a), int(b)
+        return lo <= a <= b <= hi
+    return t.isdigit() and lo <= int(t) <= hi
+
+def _valid_Aint_or_Arange(token: str) -> bool:
+    t = (token or "").strip().upper()
+    if not t.startswith("A"):
+        return False
+    body = t[1:]
+    if "-" in body:
+        a, b = body.split("-", 1)
+        if not (a.isdigit() and b.isdigit()):
+            return False
+        a, b = int(a), int(b)
+        return 2 <= a <= b <= 9
+    return body.isdigit() and 2 <= int(body) <= 9
+
+def _valid_double_hards(s: str) -> bool:
+    """
+    Accept:
+      - single range or int: '9-11' or '11'
+      - slash form mixing range/int on each side: '10-11/11', '9/10-11', '11/11', etc.
+    """
+    if not s: return False
+    s = s.strip().upper()
+    if "/" in s:
+        left, right = s.split("/", 1)
+        return _valid_int_or_range(left, 2, 11) and _valid_int_or_range(right, 2, 11)
+    return _valid_int_or_range(s, 2, 11)
+
+def _valid_double_softs(s: str) -> bool:
+    """
+    Accept:
+      - single soft range or int: 'A4-A7' or 'A7'
+      - slash form mixing range/int on each side: 'A4-A7/A7', 'A7/A5-A8', 'A7/A7', etc.
+    """
+    if not s: return False
+    s = s.strip().upper()
+    if "/" in s:
+        left, right = s.split("/", 1)
+        return _valid_Aint_or_Arange(left) and _valid_Aint_or_Arange(right)
+    return _valid_Aint_or_Arange(s)
+
+# keep _valid_hit_value, _valid_splits, _norm_dealer_val_for_perfect, _ALLOWED_COLS, and _validate_value() as before,
+# but ensure _validate_value() calls the updated _valid_double_hards/_valid_double_softs.
+def _validate_value(col: str, new_val: str) -> bool:
+    if col in ("hit_until_hard", "hit_until_soft"):
+        return _valid_hit_value(new_val)
+    if col == "double_hards":
+        return _valid_double_hards(new_val)
+    if col == "double_softs":
+        return _valid_double_softs(new_val)
+    if col == "splits":
+        return _valid_splits(new_val)
+    return False
+
 @edits_bp.post("/chart/update_perfect_cell")
 @require_user
 def update_perfect_cell():
@@ -310,6 +373,9 @@ def update_perfect_cell():
       "new_val": "9-11",
       "changed": true
     }
+
+    Special:
+      - You can clear a cell by sending new_val as "None", "NULL", or "" (stores SQL NULL).
     """
     data = request.get_json(silent=True) or {}
 
@@ -326,13 +392,18 @@ def update_perfect_cell():
     if col not in _ALLOWED_COLS:
         return jsonify({"ok": False, "error": f"invalid or disallowed column '{col}'"}), 400
 
-    new_val = (data.get("new_val") or "").strip().upper()
-    if not _validate_value(col, new_val):
+    raw_new = (data.get("new_val") or "")
+    new_upper = raw_new.strip().upper()
+
+    # Treat "None"/"NULL"/"" as a request to set SQL NULL
+    set_null = (new_upper in ("NONE", "NULL", ""))
+
+    # Only validate when not clearing
+    if not set_null and not _validate_value(col, new_upper):
         return jsonify({"ok": False, "error": f"new_val invalid for column '{col}'"}), 400
 
     db, cur = get_db()
     user_id = g.user["id"]
-    # user_id = '61832595-68fa-4146-b7ea-7d55df00a3df'
 
     # Find user's perfect chart_id for this mode
     cur.execute("""
@@ -358,15 +429,18 @@ def update_perfect_cell():
     if not r:
         return jsonify({"ok": False, "error": "perfect chart row not found for given dealer_val"}), 404
 
-    old_val = (r["val"] or "")
-    changed = (old_val.strip().upper() != new_val)
+    old_val = r["val"]  # may be None
+    old_norm_up = ((old_val or "").strip().upper())
+
+    value_to_store = None if set_null else new_upper
+    changed = ((old_val is not None) if set_null else (old_norm_up != new_upper))
 
     if changed:
         cur.execute(f"""
             UPDATE perfect_entries
             SET {col} = %s
             WHERE chart_id = %s AND dealer_val = %s
-        """, (new_val, chart_id, dealer_val))
+        """, (value_to_store, chart_id, dealer_val))
         db.commit()
 
     return jsonify({
@@ -376,6 +450,6 @@ def update_perfect_cell():
         "dealer_val": dealer_val,
         "col": col,
         "old_val": old_val,
-        "new_val": new_val,
+        "new_val": (None if set_null else new_upper),
         "changed": changed
-    }), 200 
+    }), 200
