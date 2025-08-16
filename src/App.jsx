@@ -856,9 +856,9 @@ const transformPerfectChart = (apiData) => {
   const allActionOptions = [
     'H','S','D','P','R',
     'DS','D/S',
-    'RH','R/H',
-    'RS','R/S',
-    'RP','R/P',
+    'RH','S/H', 'H/S',
+    'RS','P/H',
+    'RP','H/P',
     'RP/H','RH/H','RH/P','RH/PRH'
   ]
 
