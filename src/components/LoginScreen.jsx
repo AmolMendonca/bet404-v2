@@ -73,7 +73,7 @@ export default function LoginScreen() {
               ? 'Reset your password' 
               : isSignUp 
               ? 'Create your account' 
-              : 'Welcome to bet404'
+              : 'Welcome to bet404 Games'
             }
           </h1>
           <p className="text-gray-500 text-sm">

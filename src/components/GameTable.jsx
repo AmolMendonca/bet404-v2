@@ -688,7 +688,7 @@ export default function GameTable({ mode = 'perfect', onBack, settings, uiTheme,
       <div className="relative z-10 max-w-7xl mx-auto px-4 py-8">
         {unsupportedMode && (
           <div className="mb-4 rounded-lg border border-yellow-400/40 bg-yellow-500/10 text-yellow-300 px-4 py-3">
-            Mode not supported for grading, grader will use {resolvedForGrader}
+            A-9 Hole Card
           </div>
         )}
 

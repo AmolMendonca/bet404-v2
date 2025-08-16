@@ -133,10 +133,10 @@ function LoginScreen() {
             <span className="text-white font-semibold text-lg">B</span>
           </div>
           <h1 className="text-2xl font-medium text-gray-900 mb-2">
-            {isSignUp ? 'Create account' : 'Bet404'}
+            {isSignUp ? 'Create account' : 'Bet404 Games'}
           </h1>
           <p className="text-gray-500 text-sm">
-            {isSignUp ? 'Sign up to get started' : 'Professional blackjack training'}
+            {isSignUp ? 'Sign up to get started' : 'Professional AP training'}
           </p>
         </div>
 
@@ -2229,11 +2229,11 @@ function InstructionsPage({ onBack }) {
                 </div>
                 <div className="bg-green-50 rounded-lg p-4">
                   <h3 className="font-medium text-green-900 mb-2">Double Availability</h3>
-                  <p className="text-sm text-green-800">Any, 9-10, 10-11, or 9-11 on first two cards</p>
+                  <p className="text-sm text-green-800">Any, 10-11, or 9-11 on first two cards</p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-4">
                   <h3 className="font-medium text-purple-900 mb-2">Deck Count</h3>
-                  <p className="text-sm text-purple-800">Selectable for Blackjack (Spanish 21 uses fixed 6-deck)</p>
+                  <p className="text-sm text-purple-800">Selectable for Blackjack (Spanish 21 uses fixed 6-deck). Note that deck count only influences the shoe, not the charts.</p>
                 </div>
               </div>
             </div>
@@ -2274,7 +2274,7 @@ function InstructionsPage({ onBack }) {
                       <span className="font-medium">Blackjack:</span> 4-10, 2-3, A-9 (DAS), A-9 (NoDAS)
                     </div>
                     <div>
-                      <span className="font-medium">Spanish 21:</span> Spanish_4to9, Spanish_2to3
+                      <span className="font-medium">Spanish 21:</span> Spanish 4-9, Spanish 2-3
                     </div>
                   </div>
                 </div>
@@ -2291,10 +2291,10 @@ function InstructionsPage({ onBack }) {
                     </div>
                   </div>
                   <div className="bg-green-50 rounded-lg p-4">
-                    <h4 className="font-medium text-green-900 mb-2">Smart Macros</h4>
+                    <h4 className="font-medium text-green-900 mb-2">Macros</h4>
                     <div className="space-y-1 text-sm text-green-800">
                       <div><span className="font-mono bg-green-200 px-1 rounded">DS</span> Double, else Stand</div>
-                      <div><span className="font-mono bg-green-200 px-1 rounded">DH</span> Double, else Hit</div>
+                      <div><span className="font-mono bg-green-200 px-1 rounded">RP</span> Surrender, else Split</div>
                       <div><span className="font-mono bg-green-200 px-1 rounded">RH</span> Surrender, else Hit</div>
                       <div><span className="font-mono bg-green-200 px-1 rounded">RS</span> Surrender, else Stand</div>
                     </div>
@@ -2389,7 +2389,7 @@ function InstructionsPage({ onBack }) {
             <h2 className="text-lg font-semibold text-red-900">Grading Priority</h2>
           </div>
           <p className="text-sm text-red-800 mb-4">
-            Perfect modes use the actual down-card. All modes follow this priority order:
+            Perfect modes use the actual down-card. Perfect modes follow this priority order:
           </p>
           <div className="flex flex-wrap gap-2">
             <span className="bg-red-200 text-red-800 px-3 py-1 rounded-lg text-sm font-medium">1. Split</span>
@@ -2405,10 +2405,10 @@ function InstructionsPage({ onBack }) {
             <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mr-3">
               <span className="text-white text-sm">🚀</span>
             </div>
-            <h2 className="text-lg font-semibold">What's Coming Next</h2>
+            <h2 className="text-lg font-semibold">Future Versions</h2>
           </div>
           <p className="text-gray-300 text-sm leading-relaxed">
-            Additional advantage-play modules—beginning with Ultimate Texas Hold 'Em and Criss Cross—are in active development.
+            Additional advantage-play modules (Ultimate Texas Hold 'Em and Criss Cross Poker) will potentially be added in future versions.
           </p>
         </section>
 
@@ -2438,7 +2438,7 @@ function InstructionsPage({ onBack }) {
               </div>
               <div className="flex items-start space-x-2">
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <p className="text-sm text-gray-700">Think in soft-other-card terms for Perfect double_softs (A7 = soft-18)</p>
+                <p className="text-sm text-gray-700">Soft 18, 19 and 20 (A7, A8, A9) map to their respective hards on dealer's side for perfect modes</p>
               </div>
             </div>
           </div>
@@ -2462,7 +2462,7 @@ function Home({ onGo }) {
             <div className="flex items-center space-x-3">
               <Gamepad2 size={24} />
               <div className="text-left">
-                <div className="font-medium">Play</div>
+                <div className="font-medium">Hole carding</div>
                 <div className="text-xs text-gray-300">Choose Blackjack or Spanish 21</div>
               </div>
             </div>
@@ -2476,7 +2476,7 @@ function Home({ onGo }) {
               <BookOpen size={24} className="text-gray-500" />
               <div className="text-left">
                 <div className="font-medium text-gray-900">Strategy chart</div>
-                <div className="text-xs text-gray-500">Browse charts</div>
+                <div className="text-xs text-gray-500">Browse and edit charts</div>
               </div>
             </div>
           </button>
@@ -2503,7 +2503,7 @@ function Home({ onGo }) {
               <Gamepad2 size={24} className="text-gray-500" />
               <div className="text-left">
                 <div className="font-medium text-gray-900">More games</div>
-                <div className="text-xs text-gray-500">Ultimate Texas Hold 'Em & more are in development.
+                <div className="text-xs text-gray-500">Other Games
 
 </div>
               </div>
