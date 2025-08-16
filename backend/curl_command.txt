@@ -26,10 +26,10 @@ curl -X POST http://localhost:5001/api/grade \
     "user_id": "test_user1",
     "hole_mode": "perfect",
     "player_cards": [
-      {"rank":"3","suit":"hearts"},
-      {"rank":"2","suit":"clubs"}
+      {"rank":"A","suit":"hearts"},
+      {"rank":"8","suit":"clubs"}
     ],
-    "dealer_up":   {"rank":"3","suit":"spades"},
-    "dealer_hole": {"rank":"2","suit":"diamonds"},
+    "dealer_up":   {"rank":"K","suit":"spades"},
+    "dealer_hole": {"rank":"6","suit":"diamonds"},
     "action": "P"
   }'
