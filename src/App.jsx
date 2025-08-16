@@ -707,6 +707,43 @@ function StrategyChartPage({ onBack }) {
     return single
   }
 
+  // Splits validator/normalizer:
+  // - empty  => '' (clears)
+  // - side   := 'None' | ascending list using A23456789T (10 accepted & normalized to T)
+  //             e.g., A2346789T, A, A8, 234T (strictly ascending, no repeats)
+  // - overall:= side | side '/' side
+  function normalizeSplitsInput(str) {
+    const cleaned = String(str || '').trim()
+    if (cleaned === '') return '' // allow clearing
+    if (/^none$/i.test(cleaned)) return 'None'
+
+    const order = { A:1, '2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, T:10 }
+
+    const normSide = (raw) => {
+      if (raw == null) return null
+      let s = String(raw).toUpperCase().replace(/10/g, 'T').trim()
+      if (/^none$/i.test(s)) return 'None'
+      if (!/^[A23456789T]+$/.test(s)) return null
+      let prev = 0
+      for (const ch of s) {
+        const v = order[ch]
+        if (!v || v <= prev) return null
+        prev = v
+      }
+      return s
+    }
+
+    if (cleaned.includes('/')) {
+      const [lhsRaw, rhsRaw] = cleaned.split('/')
+      const L = normSide(lhsRaw?.trim())
+      const R = normSide(rhsRaw?.trim())
+      if (L && R) return `${L}/${R}`
+      return null
+    }
+
+    return normSide(cleaned)
+  }
+
   // -------------------------------------------------------------------------
 
   const openPerfectEditor = ({ dealer_val, col, currentVal, labelKey }) => {
@@ -757,6 +794,12 @@ function StrategyChartPage({ onBack }) {
         toast.error("Enter A2–AT (AT=A10). Each side can be None or up to two values/ranges; use '/' to separate sides. Leave empty to clear.")
         return
       }
+    } else if (ctx.col === 'splits') {
+      normalized = normalizeSplitsInput(editVal)
+      if (normalized === null) {
+        toast.error("Enter ascending ranks from A23456789T (10 allowed as T). Optional '/' to provide two sides or 'None'. Examples: A2346789T, A, None, A23789/A236789, A8, A78/A8.")
+        return
+      }
     } else {
       toast.error('Unsupported column')
       return
@@ -768,7 +811,7 @@ function StrategyChartPage({ onBack }) {
         body: JSON.stringify({
           mode: ctx.mode,               // "perfect" | "Spanish_perfect"
           dealer_val: ctx.dealer_val,   // "20".."6" | "A6".."AA"
-          col: ctx.col,                 // "hit_until_hard" | "hit_until_soft" | "double_hards" | "double_softs"
+          col: ctx.col,                 // "hit_until_hard" | "hit_until_soft" | "double_hards" | "double_softs" | "splits"
           new_val: normalized,
         }),
       })
@@ -1117,7 +1160,7 @@ function StrategyChartPage({ onBack }) {
                             ) : renderCell(c['Double Hards'])}
                           </td>
 
-                          {/* Double Softs — NOW editable */}
+                          {/* Double Softs — editable */}
                           <td className="px-2 py-2 border border-gray-100">
                             {editable ? (
                               <button
@@ -1135,8 +1178,25 @@ function StrategyChartPage({ onBack }) {
                             ) : renderCell(c['Double Softs'])}
                           </td>
 
-                          {/* Remaining columns */}
-                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Splits'])}</td>
+                          {/* Splits — NOW editable */}
+                          <td className="px-2 py-2 border border-gray-100">
+                            {editable ? (
+                              <button
+                                onClick={() => openPerfectEditor({
+                                  dealer_val: row.rowLabel,
+                                  col: 'splits',
+                                  labelKey: 'Splits',
+                                  currentVal: c['Splits'],
+                                })}
+                                className="w-full text-left hover:bg-gray-50 rounded px-1 py-0.5"
+                                title="Edit Splits"
+                              >
+                                {renderCell(c['Splits'])}
+                              </button>
+                            ) : renderCell(c['Splits'])}
+                          </td>
+
+                          {/* Surrender (view only) */}
                           <td className="px-2 py-2 border border-gray-100">{renderCell(c['Surrender'])}</td>
                         </tr>
                       )
@@ -1158,6 +1218,7 @@ function StrategyChartPage({ onBack }) {
               <p className="text-xs text-gray-600 mb-3">
                 {editCtxRef.current?.col === 'double_hards' && "Enter 2–11, a range like 9-11, or combine with '/' where each side is a number, a range, or 'None'. Leave empty to clear."}
                 {editCtxRef.current?.col === 'double_softs' && "Enter A2–AT (AT = A10). Each side of '/' can be 'None', a single value or range, or up to two values/ranges (separated by space or comma). Examples: A2-A5/None, A3-A10/A4-A6, A2-A10/A4. Leave empty to clear."}
+                {editCtxRef.current?.col === 'splits' && "Enter ascending ranks using A23456789T (10 is allowed as T). Use '/' to provide two sides or 'None'. Examples: A2346789T, A, None, A23789/A236789, A8, A78/A8."}
                 {(editCtxRef.current?.col === 'hit_until_hard' || editCtxRef.current?.col === 'hit_until_soft') && "Enter 12–20 or N/M with each 12–20."}
               </p>
 
@@ -1172,7 +1233,9 @@ function StrategyChartPage({ onBack }) {
                       ? raw.replace(/[^0-9A-Za-z/ \-]/g,'') // allow letters for 'None'
                       : col === 'double_softs'
                         ? raw.replace(/[^0-9A-Za-z/ ,\-]/g,'') // allow A/T/N/O/E etc
-                        : raw.replace(/[^0-9/ ]/g,'')
+                        : col === 'splits'
+                          ? raw.replace(/[^0-9A-Za-z/]/g,'') // allow A..Z, digits (for '10'), and '/'
+                          : raw.replace(/[^0-9/ ]/g,'')
                   setEditVal(sanitized)
                 }}
                 onKeyDown={(e)=>{ if(e.key==='Enter') confirmPerfectEdit(); if(e.key==='Escape') setEditOpen(false) }}
@@ -1180,6 +1243,7 @@ function StrategyChartPage({ onBack }) {
                 placeholder={
                   editCtxRef.current?.col === 'double_hards' ? 'e.g. 9-11/None or 11'
                   : editCtxRef.current?.col === 'double_softs' ? 'e.g. A3-A10/A4-A6 or A2-A10/A4'
+                  : editCtxRef.current?.col === 'splits' ? 'e.g. A2346789T or A78/A8 or None'
                   : 'e.g. 16 or 12/18'
                 }
               />
