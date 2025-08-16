@@ -310,31 +310,57 @@ function StrategyChartPage({ onBack }) {
     return chart
   }
 
-  const transformPerfectChart = (apiData) => {
-    const entries = Array.isArray(apiData?.perfect_entries) ? apiData.perfect_entries : []
-    const rows = entries.map(e => ({
-      rowLabel: String(e.dealer_val),
-      columns: {
-        'Hit Until Hard': e.harduntil ?? '',
-        'Hit Until Soft': e.softstanduntil ?? '',
-        'Double Hards':   e.doublehards ?? '',
-        'Double Softs':   e.doublesofts ?? '',
-        'Splits':         e.splits ?? '',
-        'Surrender': [e.lshards, e.lssofts].filter(Boolean).join(' / ')
-      }
-    }))
-    const byLabel = Object.fromEntries(rows.map(r => [r.rowLabel.toUpperCase(), r]))
-    const hardOrdered = []
-    for (let n = 20; n >= 6; n--) {
-      const r = byLabel[String(n)]
-      if (r) hardOrdered.push(r)
+// replace your transformPerfectChart with this
+const transformPerfectChart = (apiData) => {
+  const entries = Array.isArray(apiData?.perfect_entries) ? apiData.perfect_entries : []
+
+  // build uniform row objects
+  const rows = entries.map(e => ({
+    rowLabel: String(e.dealer_val).toUpperCase(), // "20".."6", "A2".."A10", "AA", etc.
+    columns: {
+      'Hit Until Hard': e.harduntil ?? '',
+      'Hit Until Soft': e.softstanduntil ?? '',
+      'Double Hards':   e.doublehards ?? '',
+      'Double Softs':   e.doublesofts ?? '',
+      'Splits':         e.splits ?? '',
+      'Surrender': [e.lshards, e.lssofts].filter(Boolean).join(' / ')
     }
-    const softPreferred = ['A6','A7','A8','A9','AA']
-    const softOrdered = softPreferred.map(l => byLabel[l]).filter(Boolean)
-    const picked = new Set([...hardOrdered, ...softOrdered].map(r => r.rowLabel.toUpperCase()))
-    const others = rows.filter(r => !picked.has(r.rowLabel.toUpperCase()))
-    return [...hardOrdered, ...softOrdered, ...others]
+  }))
+
+  // partition
+  const nums = []
+  const axs  = []
+  let aaRow = null
+  const others = []
+
+  const aceNum = (lab) => {
+    // A2..A9, AT or A10 -> 10
+    const s = lab.slice(1) // after 'A'
+    if (s === 'T') return 10
+    const n = parseInt(s, 10)
+    return Number.isFinite(n) ? n : NaN
   }
+
+  for (const r of rows) {
+    const lab = r.rowLabel
+    if (/^\d+$/.test(lab)) { nums.push(r); continue }
+    if (/^AA$/.test(lab)) { aaRow = r; continue }
+    if (/^A(2|3|4|5|6|7|8|9|10|T)$/.test(lab)) { axs.push(r); continue }
+    others.push(r)
+  }
+
+  // sort: numbers descending, then Ax descending by the numeric part, then AA, then any leftovers
+  nums.sort((a, b) => parseInt(b.rowLabel, 10) - parseInt(a.rowLabel, 10))
+  axs.sort((a, b) => aceNum(b.rowLabel) - aceNum(a.rowLabel))
+
+  const out = [...nums, ...axs]
+  if (aaRow) out.push(aaRow)
+
+  // keep any unexpected labels last, original order
+  for (const r of others) out.push(r)
+
+  return out
+}
 
   // load data
   const fetchChartData = async () => {
@@ -1632,10 +1658,10 @@ function ModeCard({ name, data }) {
   }
 
   const getAccuracyBadge = (acc) => {
-    if (acc >= 95) return { text: 'Expert', color: 'bg-green-100 text-green-800' }
-    if (acc >= 90) return { text: 'Advanced', color: 'bg-blue-100 text-blue-800' }
-    if (acc >= 80) return { text: 'Proficient', color: 'bg-yellow-100 text-yellow-800' }
-    if (acc >= 70) return { text: 'Developing', color: 'bg-orange-100 text-orange-800' }
+    if (acc >= 95) return { text: 'Max', color: 'bg-green-100 text-green-800' }
+    if (acc >= 90) return { text: 'Extreme', color: 'bg-blue-100 text-blue-800' }
+    if (acc >= 80) return { text: 'Very High', color: 'bg-yellow-100 text-yellow-800' }
+    if (acc >= 70) return { text: 'High', color: 'bg-orange-100 text-orange-800' }
     return { text: 'Learning', color: 'bg-red-100 text-red-800' }
   }
 
