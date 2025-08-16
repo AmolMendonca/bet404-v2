@@ -33,7 +33,6 @@ function TopNav({ title = 'Bet404', onGo, showBack = false }) {
          </div>
        </div>
 
-
        <div className="flex items-center space-x-2">
          <button onClick={() => onGo('stats')} className="p-2 text-gray-500" title="Stats">
            <BarChart3 size={18} />
@@ -78,7 +77,6 @@ function LoginScreen() {
  const [showReset, setShowReset] = useState(false)
  const { signIn, signUp, resetPassword, loading } = useAuth()
 
-
  const handleSubmit = async (e) => {
    e.preventDefault()
    if (isSignUp) {
@@ -87,7 +85,6 @@ function LoginScreen() {
      await signIn(email, password)
    }
  }
-
 
  const handleReset = async (e) => {
    e.preventDefault()
@@ -98,7 +95,6 @@ function LoginScreen() {
    await resetPassword(email)
    setShowReset(false)
  }
-
 
  if (showReset) {
    return (
@@ -111,7 +107,6 @@ function LoginScreen() {
            <h1 className="text-2xl font-medium text-gray-900 mb-2">Reset password</h1>
            <p className="text-gray-500 text-sm">Enter your email to reset password</p>
          </div>
-
 
          <form onSubmit={handleReset} className="space-y-4">
            <input
@@ -142,7 +137,6 @@ function LoginScreen() {
    )
  }
 
-
  return (
    <div className="min-h-screen bg-white flex items-center justify-center p-6">
      <div className="w-full max-w-sm">
@@ -157,7 +151,6 @@ function LoginScreen() {
            {isSignUp ? 'Sign up to get started' : 'Professional blackjack training'}
          </p>
        </div>
-
 
        <form onSubmit={handleSubmit} className="space-y-4">
          <input
@@ -187,7 +180,6 @@ function LoginScreen() {
            </button>
          </div>
 
-
          {!isSignUp && (
            <div className="flex justify-between text-sm">
              <span></span>
@@ -201,7 +193,6 @@ function LoginScreen() {
            </div>
          )}
 
-
          <button
            type="submit"
            disabled={loading}
@@ -214,7 +205,6 @@ function LoginScreen() {
            )}
          </button>
        </form>
-
 
        <div className="text-center mt-6">
          <button
@@ -236,7 +226,6 @@ function LoginScreen() {
 /* ------------------------- Strategy chart page (lite) ------------------------- */
 
 
-/* ------------------------- Strategy chart page (lite) ------------------------- */
 function StrategyChartPage({ onBack }) {
   const [game, setGame] = React.useState('blackjack') // blackjack or spanish
   const [bucket, setBucket] = React.useState('4to10')  // active chart key within the chosen game
@@ -262,6 +251,11 @@ function StrategyChartPage({ onBack }) {
     's2to3':  { hard: {} }
   })
   const [spPerfect, setSpPerfect] = React.useState({ rows: [] })
+
+  // --- Perfect chart inline edit modal state ---
+  const [editOpen, setEditOpen] = React.useState(false)
+  const [editVal, setEditVal] = React.useState('')
+  const editCtxRef = React.useRef(null) // { mode, dealer_val, col, labelKey }
 
   // auth fetch
   const authFetch = async (path, init = {}) => {
@@ -453,10 +447,10 @@ function StrategyChartPage({ onBack }) {
   const isPerfect = (game === 'blackjack' && bucket === 'perfect') || (game === 'spanish' && bucket === 'sp_perfect')
   const perfectRows = game === 'blackjack' ? bjPerfect.rows : spPerfect.rows
 
-  // allow editing for any non perfect bucket
-  const isEditableNow = !isPerfect
+  // allow editing everywhere via the toggle
+  const isEditableNow = true
 
-  // map a row label and column to the API payload fields
+  // map a row label and column to the API payload fields for regular (non-perfect) charts
   const buildUpdatePayload = (rowLabel, colIndex, newMoveUpper) => {
     const mode = bucketToApiMode()
     if (!mode) return null
@@ -514,9 +508,10 @@ function StrategyChartPage({ onBack }) {
     return null
   }
 
-  // save to server, then update local state on success
+  // save to server for regular charts, then update local state on success
   const saveCell = async (rowLabel, colIndex, newVal) => {
-    if (!isEditableNow) return
+    if (!editable) return
+    if (isPerfect) return // perfect editing is handled by the modal below
     const newMoveUpper = String(newVal || '').toUpperCase()
     const payload = buildUpdatePayload(rowLabel, colIndex, newMoveUpper)
     if (!payload) {
@@ -589,6 +584,152 @@ function StrategyChartPage({ onBack }) {
       toast.error('Network error')
     }
   }
+
+  // ---------- Perfect chart editing helpers ----------
+  const parseIntSafe = (s) => {
+    const n = Number.parseInt(s, 10)
+    return Number.isFinite(n) ? n : NaN
+  }
+  const in12120 = (n) => Number.isFinite(n) && n >= 12 && n <= 20
+
+  // Accept "12".."20" or "N/M" (both 12..20). Trim and normalize to "N" or "N/M"
+  function normalizeHitInput(str) {
+    const cleaned = String(str || '').trim()
+    if (!cleaned) return null
+
+    if (cleaned.includes('/')) {
+      const [lhsRaw, rhsRaw] = cleaned.split('/')
+      const lhs = parseIntSafe(lhsRaw?.trim())
+      const rhs = parseIntSafe(rhsRaw?.trim())
+      if (in12120(lhs) && in12120(rhs)) return `${lhs}/${rhs}`
+      return null
+    }
+
+    const n = parseIntSafe(cleaned)
+    if (in12120(n)) return `${n}`
+    return null
+  }
+
+  // Double Hards validator/normalizer:
+  // - empty => '' (clears, shows ❌)
+  // - side := 'None' | N | A-B   where N in [2..11], 2 ≤ A ≤ B ≤ 11
+  // - overall := side | side '/' side
+  function normalizeDoubleHardsInput(str) {
+    const cleaned = String(str || '').trim()
+    if (cleaned === '') return '' // allow clearing
+
+    const normSide = (raw) => {
+      const s = String(raw || '').trim()
+      if (!s) return null
+      if (/^none$/i.test(s)) return 'None'
+      // single number
+      if (/^\d{1,2}$/.test(s)) {
+        const n = parseIntSafe(s)
+        if (Number.isFinite(n) && n >= 2 && n <= 11) return String(n)
+        return null
+      }
+      // range a-b
+      const m = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})$/)
+      if (m) {
+        const a = parseIntSafe(m[1])
+        const b = parseIntSafe(m[2])
+        if (
+          Number.isFinite(a) && Number.isFinite(b) &&
+          a >= 2 && a <= 11 && b >= 2 && b <= 11 && a <= b
+        ) {
+          return `${a}-${b}`
+        }
+      }
+      return null
+    }
+
+    if (cleaned.includes('/')) {
+      const [lhsRaw, rhsRaw] = cleaned.split('/')
+      const L = normSide(lhsRaw)
+      const R = normSide(rhsRaw)
+      if (L && R) return `${L}/${R}`
+      return null
+    }
+
+    const single = normSide(cleaned)
+    return single
+  }
+
+  const openPerfectEditor = ({ dealer_val, col, currentVal, labelKey }) => {
+    const mode = bucketToApiMode() // "perfect" | "Spanish_perfect"
+    if (!mode) return
+    editCtxRef.current = { mode, dealer_val, col, labelKey }
+    setEditVal(String(currentVal || '').trim())
+    setEditOpen(true)
+  }
+
+  const applyLocalPerfect = ({ dealer_val, labelKey, new_val }) => {
+    const patch = (rows) => {
+      const next = rows.map(r => {
+        if (String(r.rowLabel) !== String(dealer_val)) return r
+        const cols = { ...(r.columns || {}) }
+        cols[labelKey] = new_val
+        return { ...r, columns: cols }
+      })
+      return next
+    }
+    if (game === 'blackjack') {
+      setBjPerfect(prev => ({ rows: patch(prev.rows || []) }))
+    } else {
+      setSpPerfect(prev => ({ rows: patch(prev.rows || []) }))
+    }
+  }
+
+  const confirmPerfectEdit = async () => {
+    const ctx = editCtxRef.current
+    if (!ctx) return setEditOpen(false)
+
+    let normalized
+    if (ctx.col === 'hit_until_hard' || ctx.col === 'hit_until_soft') {
+      normalized = normalizeHitInput(editVal)
+      if (!normalized) {
+        toast.error('Enter 12–20 or N/M with each 12–20')
+        return
+      }
+    } else if (ctx.col === 'double_hards') {
+      normalized = normalizeDoubleHardsInput(editVal)
+      if (normalized === null) {
+        toast.error("Enter 2–11, a range like 9-11, or use '/' with sides of number/range/None. Leave empty to clear.")
+        return
+      }
+    } else {
+      toast.error('Unsupported column')
+      return
+    }
+
+    try {
+      const res = await authFetch('/api/chart/update_perfect_cell', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: ctx.mode,               // "perfect" | "Spanish_perfect"
+          dealer_val: ctx.dealer_val,   // "20".."6" | "A6".."AA"
+          col: ctx.col,                 // "hit_until_hard" | "hit_until_soft" | "double_hards"
+          new_val: normalized,
+        }),
+      })
+      if (!res.ok) {
+        toast.error(`Save failed, HTTP ${res.status}`)
+        return
+      }
+      const json = await res.json()
+      if (!json?.ok) {
+        toast.error('Server did not confirm change')
+        return
+      }
+      applyLocalPerfect({ dealer_val: ctx.dealer_val, labelKey: ctx.labelKey, new_val: normalized })
+      toast.success('Saved')
+      setEditOpen(false)
+    } catch (e) {
+      console.error(e)
+      toast.error('Network error')
+    }
+  }
+  // -------------------------------------------------------------------------
 
   const allActionOptions = [
     'H','S','D','P','R',
@@ -728,13 +869,12 @@ function StrategyChartPage({ onBack }) {
             </select>
 
             <button
-              onClick={()=> isEditableNow ? setEditable(!editable) : null}
-              disabled={!isEditableNow}
-              className={`ml-auto px-2 py-1 border rounded text-sm flex items-center space-x-1 ${isEditableNow ? 'border-gray-200' : 'border-gray-100 text-gray-400 cursor-not-allowed'}`}
-              title={isEditableNow ? 'Toggle edit' : 'Cannot edit perfect charts'}
+              onClick={()=> setEditable(!editable)}
+              className="ml-auto px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1"
+              title="Toggle edit"
             >
               <Edit3 size={14} />
-              <span>{isEditableNow && editable ? 'Editing' : 'View only'}</span>
+              <span>{editable ? 'Editing' : 'View only'}</span>
             </button>
 
             {/* <button onClick={resetCurrentTable} className="px-2 py-1 border border-gray-200 rounded text-sm flex items-center space-x-1" title="Reset current">
@@ -823,7 +963,7 @@ function StrategyChartPage({ onBack }) {
                       <div className="w-16 py-3 px-2 text-center text-xs font-medium text-gray-900 bg-gray-50 border-r border-gray-200">{playerHandLabel}</div>
                       {actions.map((action, index) => (
                         <div key={index} className="w-12 py-2 px-1 text-center border-r border-gray-200 last:border-r-0">
-                          {isEditableNow && editable ? (
+                          {editable ? (
                             <select
                               value={action}
                               onChange={(e) => saveCell(playerHandLabel, index, e.target.value)}
@@ -874,9 +1014,62 @@ function StrategyChartPage({ onBack }) {
                       return (
                         <tr key={i} className="odd:bg-white even:bg-gray-50">
                           <td className="px-2 py-2 border border-gray-100 font-medium text-gray-900">{row.rowLabel}</td>
-                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Hard'])}</td>
-                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Hit Until Soft'])}</td>
-                          <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Hards'])}</td>
+
+                          {/* Hit Until Hard — editable */}
+                          <td className="px-2 py-2 border border-gray-100">
+                            {editable ? (
+                              <button
+                                onClick={() => openPerfectEditor({
+                                  dealer_val: row.rowLabel,
+                                  col: 'hit_until_hard',
+                                  labelKey: 'Hit Until Hard',
+                                  currentVal: c['Hit Until Hard'],
+                                })}
+                                className="w-full text-left hover:bg-gray-50 rounded px-1 py-0.5"
+                                title="Edit"
+                              >
+                                {renderCell(c['Hit Until Hard'])}
+                              </button>
+                            ) : renderCell(c['Hit Until Hard'])}
+                          </td>
+
+                          {/* Hit Until Soft — editable */}
+                          <td className="px-2 py-2 border border-gray-100">
+                            {editable ? (
+                              <button
+                                onClick={() => openPerfectEditor({
+                                  dealer_val: row.rowLabel,
+                                  col: 'hit_until_soft',
+                                  labelKey: 'Hit Until Soft',
+                                  currentVal: c['Hit Until Soft'],
+                                })}
+                                className="w-full text-left hover:bg-gray-50 rounded px-1 py-0.5"
+                                title="Edit"
+                              >
+                                {renderCell(c['Hit Until Soft'])}
+                              </button>
+                            ) : renderCell(c['Hit Until Soft'])}
+                          </td>
+
+                          {/* Double Hards — NOW editable */}
+                          <td className="px-2 py-2 border border-gray-100">
+                            {editable ? (
+                              <button
+                                onClick={() => openPerfectEditor({
+                                  dealer_val: row.rowLabel,
+                                  col: 'double_hards',
+                                  labelKey: 'Double Hards',
+                                  currentVal: c['Double Hards'],
+                                })}
+                                className="w-full text-left hover:bg-gray-50 rounded px-1 py-0.5"
+                                title="Edit Double Hards"
+                              >
+                                {renderCell(c['Double Hards'])}
+                              </button>
+                            ) : renderCell(c['Double Hards'])}
+                          </td>
+
+                          {/* The remaining columns stay read-only for now */}
                           <td className="px-2 py-2 border border-gray-100">{renderCell(c['Double Softs'])}</td>
                           <td className="px-2 py-2 border border-gray-100">{renderCell(c['Splits'])}</td>
                           <td className="px-2 py-2 border border-gray-100">{renderCell(c['Surrender'])}</td>
@@ -887,6 +1080,43 @@ function StrategyChartPage({ onBack }) {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Modal for editing perfect chart cells */}
+        {editOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-sm rounded-lg bg-white p-4 shadow-lg">
+              <h3 className="text-sm font-medium text-gray-900 mb-2">Edit value</h3>
+
+              {/* helper text varies by column */}
+              <p className="text-xs text-gray-600 mb-3">
+                {editCtxRef.current?.col === 'double_hards'
+                  ? "Enter 2–11, a range like 9-11, or combine with '/' where each side is a number, a range, or 'None' (e.g. 10-11/None). Leave empty to clear."
+                  : "Enter 12–20 or N/M with each 12–20."}
+              </p>
+
+              <input
+                autoFocus
+                value={editVal}
+                onChange={(e)=>{
+                  const col = editCtxRef.current?.col
+                  const raw = e.target.value
+                  // allow letters (None), digits, spaces, dash, slash for double_hards
+                  const sanitized = col === 'double_hards'
+                    ? raw.replace(/[^0-9A-Za-z/ \-]/g,'')
+                    : raw.replace(/[^0-9/ ]/g,'')
+                  setEditVal(sanitized)
+                }}
+                onKeyDown={(e)=>{ if(e.key==='Enter') confirmPerfectEdit(); if(e.key==='Escape') setEditOpen(false) }}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                placeholder={editCtxRef.current?.col === 'double_hards' ? 'e.g. 9-11/None or 11' : 'e.g. 16 or 12/18'}
+              />
+              <div className="mt-3 flex justify-end gap-2">
+                <button onClick={()=>setEditOpen(false)} className="px-3 py-1.5 text-sm rounded border border-gray-200">Cancel</button>
+                <button onClick={confirmPerfectEdit} className="px-3 py-1.5 text-sm rounded bg-black text-white">Save</button>
+              </div>
+            </div>
           </div>
         )}
       </main>
@@ -901,22 +1131,18 @@ function StrategyChartPage({ onBack }) {
 function PlaySettings({ onStart, onBack }) {
  const [gameType, setGameType] = useState('blackjack')
 
-
  const [bjHoleCard, setBjHoleCard] = useState('perfect')
  const [bjSurrender, setBjSurrender] = useState('Yes')
  const [bjSoft17, setBjSoft17] = useState('Hit')
  const [bjDecks, setBjDecks] = useState('6')
  const [bjDouble, setBjDouble] = useState('any')
 
-
  const [spHoleCard, setSpHoleCard] = useState('Spanish_perfect') // Spanish_4to9, Spanish_2to3, Spanish_perfect
  const [spSurrender, setSpSurrender] = useState('Yes')
  const [spSoft17, setSpSoft17] = useState('Hit')
  const [spDouble, setSpDouble] = useState('any')
 
-
  const [submitting, setSubmitting] = useState(false)
-
 
  const authFetch = async (path, init = {}) => {
    const token = await getAccessToken()
@@ -926,18 +1152,17 @@ function PlaySettings({ onStart, onBack }) {
    return fetch(path, { ...init, headers, credentials: 'include' })
  }
 
-
  const clientSettings = useMemo(() => {
    if (gameType === 'blackjack') {
      return {
        game_type: 'blackjack',
-// in App.jsx, PlaySettings → clientSettings
-hole_mode:
- bjHoleCard === '4-10' ? '4to10'
- : bjHoleCard === '2-3' ? '2to3'
- : bjHoleCard === 'A-9DAS' ? 'Ato9DAS'
- : bjHoleCard === 'A-9NoDAS' ? 'Ato9NoDAS'
- : 'perfect',
+       // in App.jsx, PlaySettings → clientSettings
+       hole_mode:
+         bjHoleCard === '4-10' ? '4to10'
+         : bjHoleCard === '2-3' ? '2to3'
+         : bjHoleCard === 'A-9DAS' ? 'Ato9DAS'
+         : bjHoleCard === 'A-9NoDAS' ? 'Ato9NoDAS'
+         : 'perfect',
        surrender_allowed: bjSurrender === 'Yes',
        soft17_hit: bjSoft17 === 'Hit',
        decks_count: Number(bjDecks),
@@ -957,7 +1182,6 @@ hole_mode:
    }
  }, [gameType, bjHoleCard, bjSurrender, bjSoft17, bjDecks, bjDouble, spHoleCard, spSurrender, spSoft17, spDouble])
 
-
  const backendPayload = useMemo(() => {
    if (gameType === 'blackjack') {
      return {
@@ -976,7 +1200,6 @@ hole_mode:
      'Double allowed': spDouble,
    }
  }, [gameType, bjHoleCard, bjSurrender, bjSoft17, bjDecks, bjDouble, spHoleCard, spSurrender, spSoft17, spDouble])
-
 
  const submitAndStart = async () => {
    setSubmitting(true)
@@ -999,11 +1222,9 @@ hole_mode:
    }
  }
 
-
  const isBJ = gameType === 'blackjack'
  const isSP = gameType === 'spanish21'
  const bjDisableDecks = bjHoleCard === 'A-9DAS' || bjHoleCard === 'A-9NoDAS'
-
 
  return (
    <div className="min-h-screen bg-gray-50">
@@ -1022,7 +1243,6 @@ hole_mode:
            </select>
          </div>
 
-
          {isBJ && (
            <div>
              <label className="block text-sm text-gray-700 mb-1">Hole card</label>
@@ -1040,7 +1260,6 @@ hole_mode:
            </div>
          )}
 
-
          {isSP && (
            <div>
              <label className="block text-sm text-gray-700 mb-1">Hole card</label>
@@ -1056,7 +1275,6 @@ hole_mode:
            </div>
          )}
 
-
          <div className="grid grid-cols-2 gap-3">
            <div>
              <label className="block text-sm text-gray-700 mb-1">Surrender</label>
@@ -1070,7 +1288,6 @@ hole_mode:
              </select>
            </div>
 
-
            <div>
              <label className="block text-sm text-gray-700 mb-1">Dealer soft 17</label>
              <select
@@ -1083,7 +1300,6 @@ hole_mode:
              </select>
            </div>
          </div>
-
 
          {isBJ && (
            <div>
@@ -1103,7 +1319,6 @@ hole_mode:
            </div>
          )}
 
-
          <div>
            <label className="block text-sm text-gray-700 mb-1">Double allowed</label>
            <select
@@ -1117,7 +1332,6 @@ hole_mode:
            </select>
          </div>
 
-
          <button
            onClick={submitAndStart}
            disabled={submitting}
@@ -1126,7 +1340,6 @@ hole_mode:
            {submitting ? 'Saving…' : 'Start'}
          </button>
        </div>
-
 
        <div className="mt-6 space-y-3">
          <button
@@ -1165,7 +1378,6 @@ function StatCard({ icon: Icon, label, value, sub }) {
  )
 }
 
-
 function ProgressBar({ pct }) {
  const clamped = Math.max(0, Math.min(100, Number.isFinite(pct) ? pct : 0))
  return (
@@ -1183,7 +1395,6 @@ function ProgressBar({ pct }) {
  )
 }
 
-
 function TinyBars({ correct = 0, errors = 0 }) {
  const total = Math.max(1, correct + errors)
  const cw = Math.round((correct / total) * 100)
@@ -1196,13 +1407,11 @@ function TinyBars({ correct = 0, errors = 0 }) {
  )
 }
 
-
 function ModeCard({ name, data }) {
  const total = data?.total ?? 0
  const correct = data?.correct ?? 0
  const errors = data?.errors ?? 0
  const accuracy = data?.accuracy ?? (total ? Math.round((correct / total) * 1000) / 10 : 0)
-
 
  return (
    <div className="rounded-xl border border-gray-200 bg-white p-4 hover:shadow-sm transition-shadow">
@@ -1222,7 +1431,6 @@ function ModeCard({ name, data }) {
  )
 }
 
-
 function SkeletonCard() {
  return (
    <div className="rounded-2xl border border-gray-200 bg-white p-4 animate-pulse">
@@ -1233,12 +1441,10 @@ function SkeletonCard() {
  )
 }
 
-
 function useStats() {
  const [data, setData] = React.useState(null)
  const [loading, setLoading] = React.useState(true)
  const [error, setError] = React.useState(null)
-
 
  const authFetch = async (path, init = {}) => {
    const token = await getAccessToken()
@@ -1247,7 +1453,6 @@ function useStats() {
    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
    return fetch(path, { ...init, headers, credentials: 'include' })
  }
-
 
  const load = React.useCallback(async () => {
    setLoading(true)
@@ -1264,11 +1469,9 @@ function useStats() {
    }
  }, [])
 
-
  React.useEffect(() => { load() }, [load])
  return { data, loading, error, reload: load }
 }
-
 
 function computeOverview(perMode) {
  const modes = perMode || {}
@@ -1282,7 +1485,6 @@ function computeOverview(perMode) {
  return { total, correct, errors, accuracy }
 }
 
-
 function Section({ title, right }) {
  return (
    <div className="mb-2 flex items-center justify-between">
@@ -1292,7 +1494,6 @@ function Section({ title, right }) {
  )
 }
 
-
 function EmptyRecent() {
  return (
    <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-600">
@@ -1300,7 +1501,6 @@ function EmptyRecent() {
    </div>
  )
 }
-
 
 function RecentList({ items }) {
  return (
@@ -1324,10 +1524,8 @@ function RecentList({ items }) {
  )
 }
 
-
 function StatsPage({ onBack }) {
  const { data, loading, error, reload } = useStats()
-
 
  if (loading) {
    return (
@@ -1344,7 +1542,6 @@ function StatsPage({ onBack }) {
      </div>
    )
  }
-
 
  if (error) {
    return (
@@ -1365,12 +1562,10 @@ function StatsPage({ onBack }) {
    )
  }
 
-
  const perMode = data?.per_mode || {}
  const overview = computeOverview(perMode)
  const streak = data?.current_streak ?? 0
  const recent = Array.isArray(data?.recent) ? data.recent : []
-
 
  const orderedModes = [
    ['perfect', perMode['perfect']],
@@ -1380,10 +1575,8 @@ function StatsPage({ onBack }) {
    ['A-9NoDAS', perMode['A-9NoDAS']],
  ].filter(([, d]) => d)
 
-
  const extraModes = Object.entries(perMode)
    .filter(([k]) => !orderedModes.map(([n]) => n).includes(k))
-
 
  return (
    <div className="min-h-screen bg-gray-50">
@@ -1396,7 +1589,6 @@ function StatsPage({ onBack }) {
          <StatCard label="Streak" value={streak} />
        </div>
 
-
        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
          <section className="lg:col-span-2 space-y-4">
            <div className="rounded-2xl border border-gray-200 bg-white p-4">
@@ -1406,7 +1598,6 @@ function StatsPage({ onBack }) {
              />
              <ProgressBar pct={overview.accuracy} />
            </div>
-
 
            <div>
              <Section title="By mode" />
@@ -1420,7 +1611,6 @@ function StatsPage({ onBack }) {
              </div>
            </div>
          </section>
-
 
          <section className="space-y-4">
            <Section
@@ -1436,7 +1626,6 @@ function StatsPage({ onBack }) {
            />
            {recent.length > 0 ? <RecentList items={recent} /> : <EmptyRecent />}
 
-
            <div className="rounded-2xl border border-gray-200 bg-white p-4">
              <div className="text-sm font-medium text-gray-900">Tips</div>
              <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-gray-600">
@@ -1447,7 +1636,6 @@ function StatsPage({ onBack }) {
            </div>
          </section>
        </div>
-
 
        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
          <button
@@ -1485,7 +1673,6 @@ function AboutPage({ onBack }) {
    </div>
  )
 }
-
 
 function SettingsPage({ onBack }) {
  return (
@@ -1530,7 +1717,6 @@ function Home({ onGo }) {
            </div>
          </button>
 
-
          <button
            onClick={() => onGo('strategy')}
            className="group border border-gray-200 p-4 rounded-xl bg-white"
@@ -1543,7 +1729,6 @@ function Home({ onGo }) {
              </div>
            </div>
          </button>
-
 
          <button
            onClick={() => onGo('more')}
@@ -1572,7 +1757,6 @@ function Dashboard() {
  const [pendingSettings, setPendingSettings] = useState(null)
  const [activeGame, setActiveGame] = useState(null)
 
-
  React.useEffect(() => {
    const isSpanish21 = route === 'play' && activeGame?.game === 'spanish21';
    if (isSpanish21) {
@@ -1588,16 +1772,13 @@ function Dashboard() {
    };
  }, [route, activeGame?.game]);
 
-
  const go = (next) => setRoute(next)
-
 
  const startGame = (settings, gameType) => {
    setPendingSettings(settings)
    setActiveGame({ mode: 'custom', settings, game: gameType })
    setRoute('play')
  }
-
 
  if (route === 'strategy') return <StrategyChartPage onBack={go} />
  if (route === 'settings') return <PlaySettings onStart={startGame} onBack={go} />
@@ -1626,7 +1807,6 @@ function Dashboard() {
          `}</style>
        )}
 
-
        <div className={isSpanish21 ? 's21-scope' : 'bg-green-700'}>
          <GameTable
            mode={activeGame.mode}
@@ -1640,7 +1820,6 @@ function Dashboard() {
    );
  }
 
-
  return <Home onGo={go} />
 }
 
@@ -1651,7 +1830,6 @@ function Dashboard() {
 export default function App() {
  const { user, loading } = useAuth()
 
-
  if (loading) {
    return (
      <div className="min-h-screen bg-white flex items-center justify-center">
@@ -1659,7 +1837,6 @@ export default function App() {
      </div>
    )
  }
-
 
  return (
    <>
