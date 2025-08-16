@@ -1792,10 +1792,175 @@ function AboutPage({ onBack }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNav title="About" onGo={onBack} showBack />
-      <main className="px-4 py-4 max-w-md mx-auto">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-sm text-gray-700">
-          <p>Bet404 is a mobile first trainer for Blackjack and Spanish 21.</p>
-          <p>Use the Settings screen to set table rules, then start training.</p>
+      <main className="px-4 py-6 max-w-lg mx-auto space-y-6">
+        {/* Hero Section */}
+        <div className="bg-gradient-to-br from-black to-gray-800 text-white rounded-2xl p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
+          <div className="relative">
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm">
+              <span className="text-white font-bold text-lg">B</span>
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Bet404 Games</h1>
+            <p className="text-gray-300 text-sm leading-relaxed">
+              Professional advantage-play training platform for serious players
+            </p>
+          </div>
+        </div>
+
+        {/* Overview */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="font-semibold text-gray-900 mb-3 flex items-center">
+            <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+            Overview
+          </h2>
+          <p className="text-sm text-gray-700 leading-relaxed">
+            Bet404 Games is an advantage-play training platform focused on high-fidelity hole-carding practice. 
+            The system reproduces decision points from live tables, grades against optimal references, and records 
+            performance over time. Training data, charts, and statistics are user-specific and persist across sessions.
+          </p>
+        </div>
+
+        {/* Training Modules */}
+        <div className="space-y-4">
+          <h2 className="font-semibold text-gray-900 flex items-center">
+            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+            Supported Training Modules
+          </h2>
+          
+          {/* Blackjack Card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="font-medium text-gray-900">Blackjack</h3>
+                <p className="text-xs text-gray-500">Hole-carding training</p>
+              </div>
+              <div className="bg-red-50 px-2 py-1 rounded-lg">
+                <span className="text-xs font-medium text-red-700">♠</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm text-gray-700 font-medium">Training Modes:</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <div className="text-xs font-medium text-gray-900">2–3</div>
+                  <div className="text-xs text-gray-600">Low cards</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <div className="text-xs font-medium text-gray-900">4–10</div>
+                  <div className="text-xs text-gray-600">Mid-high cards</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <div className="text-xs font-medium text-gray-900">A–9 DAS</div>
+                  <div className="text-xs text-gray-600">Double after split</div>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <div className="text-xs font-medium text-gray-900">A–9 No DAS</div>
+                  <div className="text-xs text-gray-600">No double split</div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg px-3 py-2 border border-yellow-200">
+                <div className="text-xs font-medium text-yellow-900">Perfect Mode</div>
+                <div className="text-xs text-yellow-700">Exact down-card known</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Spanish 21 Card */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="font-medium text-gray-900">Spanish 21</h3>
+                <p className="text-xs text-gray-500">48-card deck training</p>
+              </div>
+              <div className="bg-red-100 px-2 py-1 rounded-lg">
+                <span className="text-xs font-medium text-red-800">♥</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm text-gray-700 font-medium">Training Modes:</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-red-50 rounded-lg px-3 py-2">
+                  <div className="text-xs font-medium text-red-900">Spanish 2–3</div>
+                  <div className="text-xs text-red-600">Low range</div>
+                </div>
+                <div className="bg-red-50 rounded-lg px-3 py-2">
+                  <div className="text-xs font-medium text-red-900">Spanish 4–9</div>
+                  <div className="text-xs text-red-600">Mid range</div>
+                </div>
+              </div>
+              <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg px-3 py-2 border border-red-200">
+                <div className="text-xs font-medium text-red-900">Spanish Perfect</div>
+                <div className="text-xs text-red-700">True Spanish shoe (48 cards, Tens removed) • Fixed 6 decks</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Perfect Mode Details */}
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-5">
+          <h3 className="font-medium text-blue-900 mb-3 flex items-center">
+            <div className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center mr-2">
+              <span className="text-xs">✓</span>
+            </div>
+            Perfect Mode Grading
+          </h3>
+          <p className="text-sm text-blue-800 leading-relaxed mb-3">
+            In all "perfect" modes, dealer totals are computed from the actual up-card and down-card, 
+            and grading follows the established priority order:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">1. Split</span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">2. Surrender</span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">3. Double</span>
+            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-medium">4. Hit/Stand</span>
+          </div>
+        </div>
+
+        {/* Features Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <span className="text-green-600 text-sm">📊</span>
+            </div>
+            <div className="text-xs font-medium text-gray-900">Performance Tracking</div>
+            <div className="text-xs text-gray-600 mt-1">Detailed statistics</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <span className="text-purple-600 text-sm">📱</span>
+            </div>
+            <div className="text-xs font-medium text-gray-900">Mobile First</div>
+            <div className="text-xs text-gray-600 mt-1">Optimized for touch</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+            <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <span className="text-orange-600 text-sm">🎯</span>
+            </div>
+            <div className="text-xs font-medium text-gray-900">Live Table Accuracy</div>
+            <div className="text-xs text-gray-600 mt-1">Real scenarios</div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-2">
+              <span className="text-blue-600 text-sm">💾</span>
+            </div>
+            <div className="text-xs font-medium text-gray-900">Persistent Data</div>
+            <div className="text-xs text-gray-600 mt-1">Cross-session saves</div>
+          </div>
+        </div>
+
+        {/* Call to Action */}
+        <div className="bg-black text-white rounded-xl p-5 text-center">
+          <h3 className="font-semibold mb-2">Ready to master advantage play?</h3>
+          <p className="text-gray-300 text-sm mb-4">
+            Train like a pro with high-fidelity hole-card scenarios
+          </p>
+          <button 
+            onClick={() => onBack('settings')}
+            className="bg-white text-black px-6 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+          >
+            Start Training
+          </button>
         </div>
       </main>
     </div>
